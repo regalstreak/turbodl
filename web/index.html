@@ -215,12 +215,19 @@ function renderCat(){
   catFiltered=q?cat.filter(x=>String(x.name).toLowerCase().includes(q)||String(x.tid).toLowerCase().includes(q)):cat;
   catShown=0;
   $('cc').textContent=catFiltered.length+' item'+(catFiltered.length===1?'':'s');
-  const wrap=document.createElement('div'); wrap.className='list'; wrap.id='catlist';
-  $('cat').innerHTML=''; $('cat').appendChild(wrap);
-  moreCat();
+  $('cat').innerHTML='';
+  const wrap=document.createElement('div');
+  wrap.className='list'; wrap.id='catlist';
+  wrap.addEventListener('scroll',()=>{
+    if(wrap.scrollTop+wrap.clientHeight >= wrap.scrollHeight-400) fillCat();
+  });
+  $('cat').appendChild(wrap);
+  fillCat();
 }
-function moreCat(){
-  const wrap=$('catlist'); if(!wrap)return;
+// loads the next page, and keeps loading while the list is too short to scroll
+function fillCat(){
+  const wrap=$('catlist'); if(!wrap) return;
+  const sentinel=$('sent'); if(sentinel) sentinel.remove();
   const end=Math.min(catShown+PAGE,catFiltered.length);
   const frag=document.createDocumentFragment();
   for(let i=catShown;i<end;i++){
@@ -240,12 +247,15 @@ function moreCat(){
   }
   wrap.appendChild(frag);
   catShown=end;
-  const old=$('more'); if(old)old.remove();
   if(catShown<catFiltered.length){
-    const b=document.createElement('button'); b.id='more'; b.className='g';
-    b.style.margin='10px'; b.textContent='Show more ('+(catFiltered.length-catShown)+' left)';
-    b.onclick=moreCat;
-    wrap.appendChild(b);
+    const s=document.createElement('div'); s.id='sent'; s.className='catrow';
+    s.innerHTML='<span class="muted">loading more… ('+catShown+' of '+catFiltered.length+')</span>';
+    wrap.appendChild(s);
+    if(wrap.scrollHeight<=wrap.clientHeight+40) fillCat();   // viewport not filled yet
+  } else if(catShown>PAGE){
+    const s=document.createElement('div'); s.id='sent'; s.className='catrow';
+    s.innerHTML='<span class="muted">all '+catShown+' shown</span>';
+    wrap.appendChild(s);
   }
 }
 

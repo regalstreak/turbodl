@@ -69,7 +69,7 @@ void core_load_modules(int with_video) {
     };
     for (size_t i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
         int r = sceSysmoduleLoadModuleInternal(mods[i]);
-        if (r < 0) printf("[pkgdl] load module 0x%08X failed 0x%08X\n", mods[i], r);
+        if (r < 0) printf("[turbodl] load module 0x%08X failed 0x%08X\n", mods[i], r);
     }
     if (with_video) {
         sceSysmoduleLoadModuleInternal(SYSMOD_VIDEO_OUT);

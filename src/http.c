@@ -16,7 +16,7 @@ static int s_http = -1;
 int http_global_init(void) {
     int ret;
     sceNetInit();
-    int pool = sceNetPoolCreate("pkgdl_net", NET_POOL, 0);
+    int pool = sceNetPoolCreate("turbodl_net", NET_POOL, 0);
     if (pool < 0) { log_msg("sceNetPoolCreate 0x%08X", pool); return -1; }
     int ssl = sceSslInit(SSL_POOL);
     if (ssl < 0) { log_msg("sceSslInit 0x%08X", ssl); return -1; }

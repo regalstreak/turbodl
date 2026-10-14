@@ -17,7 +17,7 @@ A multi-connection download manager for jailbroken PS4 (GoldHEN). It downloads f
   - add links (several at once)
   - pause, resume, retry and remove
   - set per-site cookies and other settings
-  - browse your own catalog files (full list, searchable)
+  - browse your own catalog files (whole list, loads as you scroll, searchable)
 - **TV UI**: progress, speed and ETA, controlled with the gamepad.
 - **Progress notifications**: PS4 popups every N % (default 50 %, so at 50 % and when it finishes; 0 turns them off).
 - **Per-site cookies** for downloads that need a login. A cookie is only sent to its own domain and subdomains, and survives redirects to CDN subdomains.
@@ -70,7 +70,13 @@ No lists are included.
 
 ### Upgrading from an older build
 
-The data directory used to be `/user/data/pkgdl`. On first start the app moves it to `/user/data/turbodl` in one step (downloads, resume state, queue, cookies and settings keep working). Nothing to do by hand.
+The data directory used to be `/user/data/pkgdl`; it is now `/user/data/turbodl`. Move it once by hand if you are upgrading (the app does not touch it):
+
+```sh
+# over the GoldHEN FTP server (port 2121)
+curl -Q "RNFR /user/data/pkgdl/config.ini" -Q "RNTO /user/data/turbodl/config.ini" ftp://<ps4-ip>:2121/
+curl -Q "RNFR /user/data/pkgdl/downloads/<file>" -Q "RNTO /user/data/turbodl/downloads/<file>" ftp://<ps4-ip>:2121/
+```
 
 The internal title ids stay `PKDL00001` (app) and `PKDL00002` (background service) so that upgrades install over the previous version instead of creating a second app.
 

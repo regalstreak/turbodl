@@ -166,8 +166,6 @@ static void *startup_thread(void *arg) {
 
 int main(void) {
     core_early_init("app", 1);
-    ui_status(1, "Moving old files...");
-    migrate_legacy();
     config_load();
     core_get_ip();
     if (ui_init() != 0) log_msg("UI init failed");

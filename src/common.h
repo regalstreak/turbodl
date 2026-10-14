@@ -8,7 +8,6 @@
 #ifndef APP_DIR
 #define APP_DIR     "/user/data/turbodl"
 #endif
-#define LEGACY_APP_DIR "/user/data/pkgdl"   // pre-rename location, moved once at startup
 #ifndef FPKGI_DIR
 #define FPKGI_DIR   "/user/data/FPKGi"   // optional: read FPKGi-format list files the user already has
 #endif
@@ -76,7 +75,6 @@ extern int g_remote;           // app: UI mirrors the daemon over 127.0.0.1
 // core.c
 int  core_jailbreak(void);
 void klog_printf(const char *s);        // best-effort GoldHEN kernel log (readable over nc <ps4-ip> 3232)
-void migrate_legacy(void);
 void core_load_modules(int with_video);
 void core_get_ip(void);
 void core_early_init(const char *role, int with_video);
