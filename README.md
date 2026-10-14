@@ -17,11 +17,11 @@ A multi-connection download manager for jailbroken PS4 (GoldHEN). It downloads f
   - add links (several at once)
   - pause, resume, retry and remove
   - set per-site cookies and other settings
-  - browse your own catalog files
+  - browse your own catalog files (full list, searchable)
 - **TV UI**: progress, speed and ETA, controlled with the gamepad.
-- **Progress notifications**: PS4 popups every N % (configurable, default 10 %, 0 = off).
+- **Progress notifications**: PS4 popups every N % (default 50 %, so at 50 % and when it finishes; 0 turns them off).
 - **Per-site cookies** for downloads that need a login. A cookie is only sent to its own domain and subdomains, and survives redirects to CDN subdomains.
-- **Catalog browser**: reads list files in FPKGi JSON format that *you* place on the console.
+- **Catalog browser** on the TV and in the web panel: reads list files in FPKGi JSON format that *you* place on the console, with search on both.
 
 ## Requirements
 
@@ -45,6 +45,10 @@ After a reboot, open TurboDL once to start the background service again.
 | □ ×2 | remove item and delete its file |
 | L1 / R1 | fewer / more connections per download |
 | L2 / R2 | fewer / more parallel downloads |
+| OPTIONS | switch between the download list and the catalog |
+| SQUARE (catalog) | search the catalog with the on-screen keyboard |
+| TRIANGLE (catalog) | clear the search filter |
+| L3 (catalog) | reload the list from disk |
 | ↑ / ↓ | select |
 
 ### Cookies for login-protected downloads
@@ -53,21 +57,27 @@ In the web panel under **Settings**:
 1. Enter the site's domain (e.g. `example.com`).
 2. Paste the `Cookie:` request header copied from your browser's dev tools.
 
-The cookie is sent only to that domain and its subdomains. Leave the cookie empty to remove a site. Cookies are stored in `/user/data/pkgdl/cookies.txt`, one `domain<TAB>cookie` per line.
+The cookie is sent only to that domain and its subdomains. Leave the cookie empty to remove a site. Cookies are stored in `/user/data/turbodl/cookies.txt`, one `domain<TAB>cookie` per line.
 
 ### Catalog
 
 The catalog tab lists entries from JSON files in the FPKGi format (`{"DATA": {"<url>": {"name": ..., "title_id": ..., "size": ...}}}`). TurboDL looks in:
 
-- `/user/data/pkgdl/catalogs/GAMES.json` (also `UPDATES`, `DLC`, `DEMOS`, `APPS`, `HOMEBREW`, `PS1`, `PS2`, `PSP`)
+- `/user/data/turbodl/catalogs/GAMES.json` (also `UPDATES`, `DLC`, `DEMOS`, `APPS`, `HOMEBREW`, `PS1`, `PS2`, `PSP`)
 - `/user/data/FPKGi/ContentJSONs/<TYPE>.json`, if you already use FPKGi
 
 No lists are included.
 
+### Upgrading from an older build
+
+The data directory used to be `/user/data/pkgdl`. On first start the app moves it to `/user/data/turbodl` in one step (downloads, resume state, queue, cookies and settings keep working). Nothing to do by hand.
+
+The internal title ids stay `PKDL00001` (app) and `PKDL00002` (background service) so that upgrades install over the previous version instead of creating a second app.
+
 ### Files on the console
 
 ```
-/user/data/pkgdl/
+/user/data/turbodl/
   downloads/      downloaded files (+ .dlstate resume files)
   config.ini      connections, max_parallel_downloads, auto_install, delete_after_install,
                   replace_installed, notify_progress_step
@@ -123,8 +133,8 @@ make            # -> IV0000-PKDL00001_00-PKGDOWNLOADER000.pkg
 
 ## Debugging
 
-- GoldHEN's klog: `nc <ps4-ip> 3232`. Crash reports there include the faulting address and any missing system-module function (NID).
-- Log file: `http://<ps4-ip>:8080/log` or `/user/data/pkgdl/log.txt` over FTP (GoldHEN FTP on port 2121).
+- The service writes boot breadcrumbs (`[turbodl] boot: ...`) to both the log file and the kernel log, so `nc <ps4-ip> 3232` shows how far it got, alongside crash reports with the faulting address and any missing system-module function (NID).
+- Log file: `http://<ps4-ip>:8080/log` or `/user/data/turbodl/log.txt` over FTP (GoldHEN FTP on port 2121).
 
 ## Credits
 

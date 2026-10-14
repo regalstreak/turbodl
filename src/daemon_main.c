@@ -12,7 +12,8 @@ int main(void) {
     core_early_init("daemon", 0);
     int r = sceSystemServiceRegisterDaemon();
     log_msg("RegisterDaemon -> 0x%08X", r);
-    core_start_engine();
+    klog_printf("[turbodl] daemon: registered");
+    core_start_engine(3000, 1);
     notify("PKG Downloader running in background: http://%s:%d", g_ip, WEB_PORT);
     for (;;) sceKernelUsleep(1000000);
     return 0;

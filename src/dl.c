@@ -493,6 +493,9 @@ static void *scheduler(void *arg) {
 }
 
 void dl_start(void) {
+    static int started = 0;
+    if (started) return;
+    started = 1;
     pthread_t t;
     thread_start(&t, scheduler, NULL, 1);
 }

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include "common.h"
 #include "sce.h"
@@ -14,8 +15,10 @@ int g_conns = 12;
 int g_auto_install = 1;
 int g_delete_after = 1;
 int g_replace = 0;
-int g_notify_step = 10;
+int g_notify_step = 50;
 int g_max_parallel = 3;
+char g_status[160] = "starting...";
+volatile int g_loading = 1;
 int g_jb_ok = 0;
 int g_net_ok = 0;
 volatile int g_quitting = 0;
@@ -51,6 +54,14 @@ int core_jailbreak(void) {
     return orbis_syscall(500, 2, &bk) == 0;
 }
 
+void ui_status(int loading, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(g_status, sizeof(g_status), fmt, ap);
+    va_end(ap);
+    g_loading = loading;
+}
+
 void core_load_modules(int with_video) {
     static const uint32_t mods[] = {
         SYSMOD_SYSCORE, SYSMOD_SYSTEM_SERVICE, SYSMOD_USER_SERVICE, SYSMOD_NETCTL, SYSMOD_NET,
@@ -80,23 +91,60 @@ void core_early_init(const char *role, int with_video) {
     setvbuf(stdout, NULL, _IONBF, 0);
     signal(SIGPIPE, SIG_IGN);
     signal(SIGSYS, SIG_IGN); // no GoldHEN -> syscall 500 returns ENOSYS instead of killing us
+    klog_printf("[turbodl] boot: start");
+    ui_status(1, "Starting...");
     g_jb_ok = core_jailbreak(); // first: gives us the rights to load internal modules
+    klog_printf(g_jb_ok ? "[turbodl] boot: jailbreak ok" : "[turbodl] boot: jailbreak FAILED");
     core_load_modules(with_video);
+    klog_printf("[turbodl] boot: modules loaded");
     mkdir_p(APP_DIR "/downloads");
+    mkdir_p(APP_DIR "/catalogs");
     log_msg("%s %s [%s] starting (jailbreak %s, build %s)", APP_NAME, APP_VERSION, role,
             g_jb_ok ? "ok" : "FAILED", BUILD_ID);
     sceUserServiceInitialize(NULL);
 }
 
 // load state + start downloader engine and web panel in this process
-void core_start_engine(void) {
+// Claim the web port first and only then start downloading: a second engine can never run.
+static void *deferred_start(void *arg) {
+    (void)arg;
+    while (!web_ready()) sceKernelUsleep(500000);
+    log_msg("Port free again - starting downloads here");
+    klog_printf("[turbodl] port free, downloads starting");
+    ui_status(0, "Ready");
+    dl_start();
+    return NULL;
+}
+
+int core_start_engine(int wait_ms, int defer_if_busy) {
+    ui_status(1, "Loading settings...");
     config_load();
     cookie_load();
     queue_load();
+    ui_status(1, "Connecting...");
     log_msg("init: network");
     if (http_global_init() == 0) g_net_ok = 1;
-    else log_msg("Network init failed");
+    else {
+        log_msg("Network init failed");
+        klog_printf("[turbodl] net init FAILED");
+        ui_status(0, "Network init failed");
+        return 0;
+    }
     core_get_ip();
+    if (!web_start(wait_ms)) {
+        if (defer_if_busy) {
+            log_msg("Port %d busy: waiting for it, then starting downloads", WEB_PORT);
+            pthread_t t;
+            thread_start(&t, deferred_start, NULL, 1);
+            return 0;
+        }
+        log_msg("port %d busy: another instance owns it, not downloading here", WEB_PORT);
+        klog_printf("[turbodl] port busy: not starting downloads");
+        ui_status(0, "Port %d already in use", WEB_PORT);
+        return 0;
+    }
+    klog_printf("[turbodl] boot: web bound, downloads starting");
+    ui_status(0, "Ready");
     dl_start();
-    web_start();
+    return 1;
 }

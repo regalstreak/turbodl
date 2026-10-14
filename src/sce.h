@@ -21,6 +21,8 @@ int sceSysmoduleLoadModule(uint16_t id);
 #define SYSMOD_VIDEO_OUT      0x80000022
 #define SYSMOD_BGFT           0x8000002A
 #define SYSMOD_FREETYPE_OL    0x009A
+#define SYSMOD_LIBIME         0x0095
+#define SYSMOD_IME_DIALOG     0x0096
 
 // ---- net / ssl / http ----
 int sceNetInit(void);

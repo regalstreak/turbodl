@@ -42,3 +42,14 @@ for _ in $(seq 1 120); do [ "$(curl -s $W/api/jobs.tsv | awk -F'\t' '$7 ~ /^par/
 ok=1; for n in A B C; do cmp -s "$D/srv/par$n.bin" "$D/app/downloads/par$n.bin" || ok=0; done
 [ $ok = 1 ] && pass "3 parallel files byte-identical" || fail "parallel files corrupt/incomplete"
 grep -q "AddressSanitizer\|runtime error" "$D/host.log" && fail "sanitizer errors after parallel run" || pass "no sanitizer errors after parallel run"
+
+# ---- catalog: on-console list is readable as TSV for the TV UI ----
+mkdir -p "$D/app/catalogs"
+cat > "$D/app/catalogs/GAMES.json" <<'JSON'
+{"DATA":{"https://example.com/a.pkg":{"name":"A Game","title_id":"CUSA00001","size":1048576,"region":"USA","version":"1.01"},
+"https://example.com/b.pkg":{"name":"B Game & Co","title_id":"CUSA00002","size":"2097152","region":"EUR","version":null}}}
+JSON
+t=$(curl -s "$W/api/catalog.tsv?t=GAMES")
+echo "$t" | grep -q "A Game	CUSA00001	1048576	USA	1.01	https://example.com/a.pkg" && pass "catalog TSV (numeric size)" || fail "catalog TSV: $t"
+echo "$t" | grep -q "B Game & Co	CUSA00002	2097152	EUR" && pass "catalog TSV (string size, & in name)" || fail "catalog TSV row 2"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$W/api/catalog.tsv?t=NOPE")" = 400 ] && pass "catalog TSV rejects bad type" || fail "catalog bad type"

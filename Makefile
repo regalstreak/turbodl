@@ -38,12 +38,12 @@ AUTHINFO := 000000000000000000000000001C004000FF00000000008000000000000000000000
 
 LIBS := -lc -lkernel -lc++ -lSceUserService -lSceVideoOut -lSceAudioOut -lScePad -lSceSysmodule \
         -lSceFreeType -lSceNet -lSceNetCtl -lSceSsl -lSceHttp -lSceBgft -lSceAppInstUtil \
-        -lSceLncUtil -lSceSystemService
+        -lSceLncUtil -lSceSystemService -lSceImeDialog
 DLIBS := -lc -lkernel -lSceUserService -lSceSysmodule -lSceNet -lSceNetCtl -lSceSsl -lSceHttp \
         -lSceBgft -lSceAppInstUtil -lSceLncUtil -lSceSystemService
 
 BUILD       := build
-ENGINE      := util config http dl install web core lnc
+ENGINE      := util config http dl install web core lnc catalog
 APP_OBJS    := $(patsubst %,$(BUILD)/%.o,$(ENGINE) app_main ui remote)
 DAEMON_OBJS := $(patsubst %,$(BUILD)/%.o,$(ENGINE) daemon_main remote_stub)
 CFLAGS  := -D__PS4__ --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -O2 -Wall -Wno-unused-result \
@@ -128,7 +128,7 @@ HOSTDIR := /tmp/turbodl_test
 host-test: $(BUILD)/index_html.h $(BUILD)/build_id.h
 	clang -O1 -g -fsanitize=address,undefined -DWEB_PORT=18080 -DAPP_DIR='"$(HOSTDIR)/app"' -DFPKGI_DIR='"$(HOSTDIR)/fpkgi"' \
 	  -I$(BUILD) -include $(BUILD)/build_id.h -Wall -Wno-unused-result \
-	  src/util.c src/config.c src/dl.c src/web.c test/mock_http.c test/host_stubs.c test/host_main.c -o $(BUILD)/host
+	  src/util.c src/config.c src/dl.c src/web.c src/catalog.c test/mock_http.c test/host_stubs.c test/host_main.c -o $(BUILD)/host
 	@echo "built $(BUILD)/host - see test/README.md"
 
 clean:

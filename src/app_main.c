@@ -115,6 +115,7 @@ static int wait_daemon(int want_up, int ms) {
 static int daemon_ensure(void) {
     int st = daemon_build_matches();
     if (st == 1) { log_msg("Background service already running"); return 1; }
+    ui_status(1, "Preparing background service...");
     if (st == 0) {
         log_msg("Updating background service...");
         remote_post("/api/quit", "", NULL, 0);
@@ -136,10 +137,15 @@ static int daemon_ensure(void) {
         remount_system(0);
         if (!ok) { log_msg("copying daemon files failed"); return 0; }
     }
-    int r = lnc_launch(DAEMON_TID);
-    if (r < 0 && (unsigned)r != 0x8094000Cu /* already running */) log_msg("daemon launch failed 0x%08X", r);
-    if (wait_daemon(1, 12000)) { log_msg("Background service started"); return 1; }
-    log_msg("Background service didn't come up");
+    for (int attempt = 0; attempt < 2; attempt++) {
+        ui_status(1, "Starting background service%s...", attempt ? " (retry)" : "");
+        int r = lnc_launch(DAEMON_TID);
+        if (r < 0 && (unsigned)r != 0x8094000Cu /* already running */) log_msg("daemon launch failed 0x%08X", r);
+        if (wait_daemon(1, 20000)) { log_msg("Background service started"); return 1; }
+        log_msg("Background service didn't come up (attempt %d)", attempt + 1);
+        klog_printf("[turbodl] app: daemon did not answer");
+        klog_printf(attempt ? "[turbodl] app: giving up, will run in-app" : "[turbodl] app: retrying daemon");
+    }
     return 0;
 }
 
@@ -148,15 +154,20 @@ static void *startup_thread(void *arg) {
     if (daemon_ensure()) {
         g_remote = 1;
         remote_start_sync();
+        ui_status(0, "Running in the background");
     } else {
+        ui_status(1, "Starting download engine...");
         log_msg("Running downloads inside the app (keep it open)");
-        core_start_engine();
+        core_start_engine(15000, 0);
+        ui_status(0, "Ready (close this app and downloads keep going once the service starts)");
     }
     return NULL;
 }
 
 int main(void) {
     core_early_init("app", 1);
+    ui_status(1, "Moving old files...");
+    migrate_legacy();
     config_load();
     core_get_ip();
     if (ui_init() != 0) log_msg("UI init failed");

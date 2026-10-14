@@ -163,6 +163,35 @@ void remote_start_sync(void) {
     thread_start(&t, sync_thread, NULL, 1);
 }
 
+static void url_encode(const char *in, char *out, size_t n) {
+    static const char *hex = "0123456789ABCDEF";
+    size_t o = 0;
+    for (; *in && o + 4 < n; in++) {
+        unsigned char c = (unsigned char)*in;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '_' || c == '.' || c == '~' || c == '/' || c == ':')
+            out[o++] = (char)c;
+        else {
+            out[o++] = '%';
+            out[o++] = hex[c >> 4];
+            out[o++] = hex[c & 15];
+        }
+    }
+    out[o] = 0;
+}
+
+// queue a link from the TV UI (works in both modes)
+void ui_add_url(const char *url) {
+    if (!g_remote) {
+        job_add(url, NULL, g_auto_install);
+        return;
+    }
+    char enc[2048], body[2200];
+    url_encode(url, enc, sizeof(enc));
+    snprintf(body, sizeof(body), "urls=%s&auto=%d", enc, g_auto_install);
+    remote_post("/api/add", body, NULL, 0);
+}
+
 int ui_job_action(int id, const char *op) {
     if (!g_remote) return job_action(id, op);
     char body[64];

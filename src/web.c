@@ -365,6 +365,39 @@ static void handle(int fd) {
             g_max_parallel = atoi(v2) > MAX_PARALLEL ? MAX_PARALLEL : atoi(v2);
         config_save();
         respond_str(fd, 200, "ok");
+    } else if (!strcmp(path, "/api/catalog.tsv")) {
+        static const char *ok2[] = {"GAMES", "UPDATES", "DLC", "DEMOS", "APPS", "HOMEBREW", "PS1", "PS2", "PSP", "PS5", NULL};
+        get_param(query, "t", v2, sizeof(v2));
+        int valid = 0;
+        for (int i = 0; ok2[i]; i++) if (!strcmp(v2, ok2[i])) valid = 1;
+        if (!valid) respond_str(fd, 400, "bad type");
+        else {
+            char p[300];
+            snprintf(p, sizeof(p), APP_DIR "/catalogs/%s.json", v2);
+            if (access(p, R_OK) != 0) snprintf(p, sizeof(p), FPKGI_DIR "/ContentJSONs/%s.json", v2);
+            int f = open(p, O_RDONLY);
+            if (f < 0) respond_str(fd, 404, "no list file on the console");
+            else {
+                off_t sz = lseek(f, 0, SEEK_END);
+                lseek(f, 0, SEEK_SET);
+                char *buf = (sz > 0 && sz < 32 * 1024 * 1024) ? malloc((size_t)sz + 1) : NULL;
+                if (!buf) respond_str(fd, 500, "list unreadable");
+                else {
+                    ssize_t got = read(f, buf, (size_t)sz);
+                    buf[got > 0 ? got : 0] = 0;
+                    size_t outn = 512 * 1024;
+                    char *out = malloc(outn);
+                    if (!out) respond_str(fd, 500, "oom");
+                    else {
+                        int n = catalog_tsv(buf, out, outn);
+                        respond(fd, 200, "text/plain; charset=utf-8", out, n > 0 ? (size_t)n : 0);
+                        free(out);
+                    }
+                    free(buf);
+                }
+                close(f);
+            }
+        }
     } else if (!strcmp(path, "/api/catalog")) {
         static const char *ok[] = {"GAMES", "UPDATES", "DLC", "DEMOS", "APPS", "HOMEBREW", "PS1", "PS2", "PSP", "PS5", NULL};
         get_param(query, "t", v2, sizeof(v2));
@@ -399,9 +432,12 @@ static void *conn_thread(void *arg) {
     return NULL;
 }
 
+static volatile int s_bound = 0;
+
 static void *listener(void *arg) {
     (void)arg;
     int s = -1;
+    int tries = 0;
     for (;;) {
         s = socket(AF_INET, SOCK_STREAM, 0);
         if (s < 0) { sceKernelUsleep(2000000); continue; }
@@ -412,8 +448,11 @@ static void *listener(void *arg) {
         a.sin_family = AF_INET;
         a.sin_port = htons(WEB_PORT);
         a.sin_addr.s_addr = htonl(INADDR_ANY);
-        if (bind(s, (struct sockaddr *)&a, sizeof(a)) == 0 && listen(s, 16) == 0) break;
-        log_msg("Web panel: bind :%d failed (%d), retrying", WEB_PORT, errno);
+        if (bind(s, (struct sockaddr *)&a, sizeof(a)) == 0 && listen(s, 16) == 0) { s_bound = 1; break; }
+        if (tries++ < 3) {
+            log_msg("Web panel: bind :%d failed (%d)", WEB_PORT, errno);
+            klog_printf("[turbodl] web bind failed");
+        }
         close(s);
         sceKernelUsleep(3000000);
     }
@@ -428,7 +467,14 @@ static void *listener(void *arg) {
     return NULL;
 }
 
-void web_start(void) {
+int web_start(int wait_ms) {
     pthread_t t;
     thread_start(&t, listener, NULL, 1);
+    for (int w = 0; w < wait_ms; w += 100) {
+        if (s_bound) return 1;
+        sceKernelUsleep(100000);
+    }
+    return s_bound;
 }
+
+int web_ready(void) { return s_bound; }

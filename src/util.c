@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <dirent.h>
+#include <unistd.h>
 #include "common.h"
 #include "sce.h"
 
@@ -26,6 +28,67 @@ static char s_log[LOG_RING][160];
 static int s_log_n = 0;
 static pthread_mutex_t s_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// GoldHEN SDK: syscall 500 cmd 1 writes a line to the kernel log (read: nc <ps4-ip> 3232)
+void klog_printf(const char *s) {
+    static int disabled = 0;
+    if (disabled) return;
+    if (orbis_syscall(500, 1, s) < 0) disabled = 1;
+}
+
+// a daemon may not reach APP_DIR before its jailbreak; keep the first writable dir
+static const char *s_logdir = NULL;
+
+static int dir_writable(const char *d) {
+    char p[400];
+    snprintf(p, sizeof(p), "%s/.w", d);
+    FILE *f = fopen(p, "w");
+    if (!f) return 0;
+    fclose(f);
+    unlink(p);
+    return 1;
+}
+
+static const char *pick_logdir(void) {
+    static const char *cand[] = {NULL, LEGACY_APP_DIR, "/mnt/sandbox/PKDL00002_000", "/data", "/temp0", NULL};
+    cand[0] = APP_DIR;
+    for (int i = 0; cand[i]; i++)
+        if (dir_writable(cand[i])) return cand[i];
+    return NULL;
+}
+
+// move a pre-rename installation into APP_DIR (once, at startup)
+void migrate_legacy(void) {
+    if (!dir_writable(LEGACY_APP_DIR)) { mkdir_p(APP_DIR); return; }
+    mkdir_p(APP_DIR);
+    DIR *d = opendir(LEGACY_APP_DIR);
+    if (!d) return;
+    int moved = 0, left = 0;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        char from[400], to[400];
+        snprintf(from, sizeof(from), "%s/%s", LEGACY_APP_DIR, e->d_name);
+        snprintf(to, sizeof(to), "%s/%s", APP_DIR, e->d_name);
+        if (dir_writable(to) || rename(from, to) == 0) { moved++; continue; }   // already there / moved
+        FILE *in = fopen(from, "rb"), *out = fopen(to, "wb");
+        if (in && out) {
+            char b[1 << 16];
+            size_t n;
+            while ((n = fread(b, 1, sizeof(b), in)) > 0) fwrite(b, 1, n, out);
+            moved++;
+            fclose(in); fclose(out);
+            unlink(from);
+        } else {
+            if (in) fclose(in);
+            if (out) fclose(out);
+            left++;
+        }
+    }
+    closedir(d);
+    if (!left) rmdir(LEGACY_APP_DIR);
+    log_msg("Moved %d item(s) from %s to %s%s", moved, LEGACY_APP_DIR, APP_DIR, left ? " (some left behind)" : "");
+}
+
 void log_msg(const char *fmt, ...) {
     char buf[512];
     va_list ap;
@@ -35,7 +98,10 @@ void log_msg(const char *fmt, ...) {
     pthread_mutex_lock(&s_log_lock);
     snprintf(s_log[s_log_n % LOG_RING], 160, "%s", buf);
     s_log_n++;
-    FILE *f = fopen(APP_DIR "/log.txt", "a");
+    if (!s_logdir) s_logdir = pick_logdir();
+    char lp[420];
+    snprintf(lp, sizeof(lp), "%s/log.txt", s_logdir ? s_logdir : "/temp0");
+    FILE *f = fopen(lp, "a");
     if (f) {
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
@@ -44,7 +110,7 @@ void log_msg(const char *fmt, ...) {
         fclose(f);
     }
     pthread_mutex_unlock(&s_log_lock);
-    printf("[pkgdl] %s\n", buf);
+    printf("[turbodl] %s\n", buf);
 }
 
 // newest last
