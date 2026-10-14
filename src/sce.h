@@ -153,6 +153,8 @@ typedef struct {
 uint32_t sceLncUtilLaunchApp(const char *tid, const char *argv[], LncAppParam *param);
 int sceLncUtilGetAppId(const char *tid);
 int sceLncUtilKillApp(uint32_t app_id);
+int lnc_running(const char *tid);
+int lnc_stop(const char *tid);
 int sceLncUtilInitialize(void);
 int sceSystemServiceRegisterDaemon(void);
 int sceSystemServiceLoadExec(const char *path, const char *argv[]);

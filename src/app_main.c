@@ -83,6 +83,18 @@ static int copy_file(const char *src, const char *dst) {
     return ok;
 }
 
+// unlink first: the old binary may still be executing (ETXTBSY), and unlink is allowed anyway
+static int put_file(const char *src, const char *dst) {
+    char tmp[420];
+    snprintf(tmp, sizeof(tmp), "%s.new", dst);
+    if (copy_file(src, tmp) != 0) return -1;
+    unlink(dst);
+    if (rename(tmp, dst) == 0) return 0;
+    int r = copy_file(src, dst);
+    unlink(tmp);
+    return r;
+}
+
 static const char *find_daemon_src(void) {
     static const char *cands[] = {
         "/mnt/sandbox/pfsmnt/PKDL00001-app0/assets/misc/daemon.bin",
@@ -117,10 +129,17 @@ static int daemon_ensure(void) {
     if (st == 1) { log_msg("Background service already running"); return 1; }
     ui_status(1, "Preparing background service...");
     if (st == 0) {
-        log_msg("Updating background service...");
+        log_msg("Updating background service (asked it to quit)");
         remote_post("/api/quit", "", NULL, 0);
-        if (!wait_daemon(0, 15000)) log_msg("old service didn't stop");
+        wait_daemon(0, 8000);
+    }
+    // an old process would keep its eboot.bin busy (ETXTBSY) and hold port 8080: make sure it is gone
+    if (lnc_running(DAEMON_TID)) {
+        ui_status(1, "Stopping old background service...");
+        remote_post("/api/quit", "", NULL, 0);
         sceKernelUsleep(500000);
+        if (lnc_running(DAEMON_TID)) lnc_stop(DAEMON_TID);
+        sceKernelUsleep(300000);
     }
     if (!g_jb_ok) { log_msg("no jailbreak -> can't install background service"); return 0; }
 
@@ -131,13 +150,14 @@ static int daemon_ensure(void) {
         if (remount_system(1) != 0) { log_msg("remount failed"); return 0; }
         mkdir(DAEMON_DIR, 0777);
         mkdir(DAEMON_DIR "/sce_sys", 0777);
-        int ok = copy_file(src, DAEMON_DIR "/eboot.bin") == 0;
+        int ok = put_file(src, DAEMON_DIR "/eboot.bin") == 0;
         if (file_size(DAEMON_DIR "/sce_sys/param.sfo") <= 0)
             ok = ok && copy_file("/system/vsh/app/NPXS21007/sce_sys/param.sfo", DAEMON_DIR "/sce_sys/param.sfo") == 0;
         remount_system(0);
         if (!ok) { log_msg("copying daemon files failed"); return 0; }
     }
     for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt) lnc_stop(DAEMON_TID);   // a leftover process would block the new one
         ui_status(1, "Starting background service%s...", attempt ? " (retry)" : "");
         int r = lnc_launch(DAEMON_TID);
         if (r < 0 && (unsigned)r != 0x8094000Cu /* already running */) log_msg("daemon launch failed 0x%08X", r);
@@ -159,7 +179,7 @@ static void *startup_thread(void *arg) {
         ui_status(1, "Starting download engine...");
         log_msg("Running downloads inside the app (keep it open)");
         core_start_engine(15000, 0);
-        ui_status(0, "Ready (close this app and downloads keep going once the service starts)");
+        ui_status(0, "Ready");
     }
     return NULL;
 }
