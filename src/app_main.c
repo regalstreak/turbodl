@@ -107,23 +107,6 @@ static const char *find_daemon_src(void) {
     return NULL;
 }
 
-// Remove the pre-rename service install. Only known files, no stat()/readdir(): their struct
-// layouts in this libc do not match the PS4 kernel (that walk crashed the app).
-static int old_daemon_present(void) {
-    return file_size(OLD_DAEMON_DIR "/eboot.bin") > 0 || file_size(OLD_DAEMON_DIR "/sce_sys/param.sfo") > 0;
-}
-static void remove_old_daemon(void) {
-    static const char *files[] = {"/eboot.bin", "/eboot.bin.new", "/sce_sys/param.sfo", NULL};
-    char p[256];
-    for (int i = 0; files[i]; i++) {
-        snprintf(p, sizeof(p), "%s%s", OLD_DAEMON_DIR, files[i]);
-        unlink(p);
-    }
-    rmdir(OLD_DAEMON_DIR "/sce_sys");
-    rmdir(OLD_DAEMON_DIR);
-    log_msg("Old service directory removed");
-}
-
 static int daemon_build_matches(void) {
     char buf[1024];
     if (remote_get("/api/info", buf, sizeof(buf)) != 200) return -1; // not running
@@ -160,13 +143,8 @@ static int daemon_ensure(void) {
 
     const char *src = find_daemon_src();
     if (!src) { log_msg("assets/misc/daemon.bin not found in app"); return 0; }
-    // older builds installed the service as PKDL00002; leave no stray app directory behind
-    if (old_daemon_present()) {
-        log_msg("Removing the old service directory %s", OLD_DAEMON_DIR);
-        if (remount_system(1) == 0) {
-            remove_old_daemon();
-            remount_system(0);
-        }
+    // The pre-rename PKDL00002 folder is deliberately left alone: deleting from it while an old
+    // instance may still run crashed the app. Nothing launches it any more.
     }
     if (!files_equal(src, DAEMON_DIR "/eboot.bin") || file_size(DAEMON_DIR "/sce_sys/param.sfo") <= 0) {
         log_msg("Installing background service to " DAEMON_DIR);

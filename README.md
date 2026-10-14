@@ -107,7 +107,7 @@ curl -Q "RNFR /user/data/pkgdl/config.ini" -Q "RNTO /user/data/turbodl/config.in
 curl -Q "RNFR /user/data/pkgdl/downloads/<file>" -Q "RNTO /user/data/turbodl/downloads/<file>" ftp://<ps4-ip>:2121/
 ```
 
-The app keeps its internal id `PKDL00001` so upgrades install over the previous version instead of creating a second app. The background service was renamed `PKDL00002` -> `TRBD00002`; upgrading removes the old service directory.
+The app keeps its internal id `PKDL00001` so upgrades install over the previous version instead of creating a second app. The background service was renamed `PKDL00002` -> `TRBD00002`; the old `/system/vsh/app/PKDL00002` folder is left in place (unused) and can be deleted over FTP after a reboot.
 
 ### Files on the console
 
