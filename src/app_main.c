@@ -145,7 +145,6 @@ static int daemon_ensure(void) {
     if (!src) { log_msg("assets/misc/daemon.bin not found in app"); return 0; }
     // The pre-rename PKDL00002 folder is deliberately left alone: deleting from it while an old
     // instance may still run crashed the app. Nothing launches it any more.
-    }
     if (!files_equal(src, DAEMON_DIR "/eboot.bin") || file_size(DAEMON_DIR "/sce_sys/param.sfo") <= 0) {
         log_msg("Installing background service to " DAEMON_DIR);
         if (remount_system(1) != 0) { log_msg("remount failed"); return 0; }
