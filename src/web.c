@@ -451,7 +451,6 @@ static void *listener(void *arg) {
         if (bind(s, (struct sockaddr *)&a, sizeof(a)) == 0 && listen(s, 16) == 0) { s_bound = 1; break; }
         if (tries++ < 3) {
             log_msg("Web panel: bind :%d failed (%d)", WEB_PORT, errno);
-            klog_printf("[turbodl] web bind failed");
         }
         close(s);
         sceKernelUsleep(3000000);

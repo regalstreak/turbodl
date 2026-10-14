@@ -6,6 +6,7 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/statvfs.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -28,11 +29,25 @@ static char s_log[LOG_RING][160];
 static int s_log_n = 0;
 static pthread_mutex_t s_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
-// GoldHEN SDK: syscall 500 cmd 1 writes a line to the kernel log (read: nc <ps4-ip> 3232)
-void klog_printf(const char *s) {
-    static int disabled = 0;
-    if (disabled) return;
-    if (orbis_syscall(500, 1, s) < 0) disabled = 1;
+// Breadcrumbs for the background service: written with raw I/O to the first writable
+// location, because a daemon may start before it can reach its data directory.
+void boot_mark(const char *stage) {
+    static const char *chosen = NULL;
+    if (!chosen) {
+        static const char *cand[] = {APP_DIR "/boot.txt", "/mnt/sandbox/PKDL00002_000/boot.txt",
+                                     "/data/boot.txt", "/temp0/boot.txt", NULL};
+        for (int i = 0; cand[i]; i++) {
+            int fd = open(cand[i], O_WRONLY | O_CREAT | O_APPEND, 0666);
+            if (fd >= 0) { close(fd); chosen = cand[i]; break; }
+        }
+        if (!chosen) return;
+    }
+    int fd = open(chosen, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0) return;
+    char line[128];
+    int n = snprintf(line, sizeof(line), "%llu %s\n", (unsigned long long)now_ms(), stage);
+    if (n > 0) { ssize_t w = write(fd, line, (size_t)n); (void)w; }
+    close(fd);
 }
 
 // a daemon may not reach APP_DIR before its jailbreak; keep the first writable dir

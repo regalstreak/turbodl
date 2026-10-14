@@ -91,12 +91,12 @@ void core_early_init(const char *role, int with_video) {
     setvbuf(stdout, NULL, _IONBF, 0);
     signal(SIGPIPE, SIG_IGN);
     signal(SIGSYS, SIG_IGN); // no GoldHEN -> syscall 500 returns ENOSYS instead of killing us
-    klog_printf("[turbodl] boot: start");
     ui_status(1, "Starting...");
-    g_jb_ok = core_jailbreak(); // first: gives us the rights to load internal modules
-    klog_printf(g_jb_ok ? "[turbodl] boot: jailbreak ok" : "[turbodl] boot: jailbreak FAILED");
+    boot_mark("boot:start");
+    g_jb_ok = core_jailbreak();
+    boot_mark(g_jb_ok ? "boot:jailbreak ok" : "boot:jailbreak FAILED"); // first: gives us the rights to load internal modules
     core_load_modules(with_video);
-    klog_printf("[turbodl] boot: modules loaded");
+    boot_mark("boot:modules done");
     mkdir_p(APP_DIR "/downloads");
     mkdir_p(APP_DIR "/catalogs");
     log_msg("%s %s [%s] starting (jailbreak %s, build %s)", APP_NAME, APP_VERSION, role,
@@ -110,7 +110,6 @@ static void *deferred_start(void *arg) {
     (void)arg;
     while (!web_ready()) sceKernelUsleep(500000);
     log_msg("Port free again - starting downloads here");
-    klog_printf("[turbodl] port free, downloads starting");
     ui_status(0, "Ready");
     dl_start();
     return NULL;
@@ -123,15 +122,17 @@ int core_start_engine(int wait_ms, int defer_if_busy) {
     queue_load();
     ui_status(1, "Connecting...");
     log_msg("init: network");
+    boot_mark("boot:net init");
     if (http_global_init() == 0) g_net_ok = 1;
     else {
         log_msg("Network init failed");
-        klog_printf("[turbodl] net init FAILED");
         ui_status(0, "Network init failed");
         return 0;
     }
     core_get_ip();
+    boot_mark("boot:web start");
     if (!web_start(wait_ms)) {
+        boot_mark("boot:web NOT bound");
         if (defer_if_busy) {
             log_msg("Port %d busy: waiting for it, then starting downloads", WEB_PORT);
             pthread_t t;
@@ -139,11 +140,10 @@ int core_start_engine(int wait_ms, int defer_if_busy) {
             return 0;
         }
         log_msg("port %d busy: another instance owns it, not downloading here", WEB_PORT);
-        klog_printf("[turbodl] port busy: not starting downloads");
         ui_status(0, "Port %d already in use", WEB_PORT);
         return 0;
     }
-    klog_printf("[turbodl] boot: web bound, downloads starting");
+    boot_mark("boot:web bound, ready");
     ui_status(0, "Ready");
     dl_start();
     return 1;

@@ -9,10 +9,11 @@ void ui_set_conns(int n) { (void)n; }
 void ui_set_parallel(int n) { (void)n; }
 
 int main(void) {
+    boot_mark("main entered");
     core_early_init("daemon", 0);
     int r = sceSystemServiceRegisterDaemon();
+    boot_mark("boot:registered");
     log_msg("RegisterDaemon -> 0x%08X", r);
-    klog_printf("[turbodl] daemon: registered");
     core_start_engine(3000, 1);
     notify("PKG Downloader running in background: http://%s:%d", g_ip, WEB_PORT);
     for (;;) sceKernelUsleep(1000000);

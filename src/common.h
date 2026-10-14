@@ -74,7 +74,7 @@ extern int g_remote;           // app: UI mirrors the daemon over 127.0.0.1
 
 // core.c
 int  core_jailbreak(void);
-void klog_printf(const char *s);        // best-effort GoldHEN kernel log (readable over nc <ps4-ip> 3232)
+void boot_mark(const char *stage);      // breadcrumb for the background service (raw file write)
 void core_load_modules(int with_video);
 void core_get_ip(void);
 void core_early_init(const char *role, int with_video);
