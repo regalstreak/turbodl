@@ -91,8 +91,9 @@ static int put_file(const char *src, const char *dst) {
     char tmp[420];
     snprintf(tmp, sizeof(tmp), "%s.new", dst);
     if (copy_file(src, tmp) != 0) return -1;
-    unlink(dst);
+    if (unlink(dst) != 0 && errno != ENOENT) log_msg("put_file: unlink %s: errno %d", dst, errno);
     if (rename(tmp, dst) == 0) return 0;
+    log_msg("put_file: rename failed (errno %d), copying in place", errno);
     int r = copy_file(src, dst);
     unlink(tmp);
     return r;
@@ -119,9 +120,10 @@ static void remove_old_service(void) {
     static const char *files[] = {OLD_DAEMON_DIR "/eboot.bin", OLD_DAEMON_DIR "/eboot.bin.new",
                                   OLD_DAEMON_DIR "/t.txt", OLD_DAEMON_DIR "/sce_sys/param.sfo",
                                   "/system/t.txt", NULL};
-    for (int i = 0; files[i]; i++) unlink(files[i]);
-    rmdir(OLD_DAEMON_DIR "/sce_sys");
-    rmdir(OLD_DAEMON_DIR);
+    for (int i = 0; files[i]; i++)
+        if (unlink(files[i]) != 0 && errno != ENOENT) log_msg("unlink %s: errno %d", files[i], errno);
+    if (rmdir(OLD_DAEMON_DIR "/sce_sys") != 0) log_msg("rmdir sce_sys: errno %d", errno);
+    if (rmdir(OLD_DAEMON_DIR) != 0) log_msg("rmdir: errno %d", errno);
     log_msg(file_size(OLD_DAEMON_DIR "/eboot.bin") < 0 ? "Old service folder removed" : "Old service folder still there");
 }
 

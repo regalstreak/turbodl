@@ -113,6 +113,8 @@ void name_from_url(const char *url, char *out, size_t n);
 uint64_t now_ms(void);
 int mkdir_p(const char *path);
 int app_dir_writable(void);
+void klog_printf(const char *s);
+int orbis_syscall(int num, ...);
 uint64_t disk_free(const char *path);
 
 // config / queue (config.c)

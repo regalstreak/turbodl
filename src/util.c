@@ -31,7 +31,18 @@ static pthread_mutex_t s_log_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Breadcrumbs for the background service: written with raw I/O to the first writable
 // location, because a daemon may start before it can reach its data directory.
+// GoldHEN SDK: syscall 500 cmd 1 writes a line to the kernel log (read: nc <ps4-ip> 3232).
+// Works from the service even before it can open files.
+void klog_printf(const char *s) {
+    static int disabled = 0;
+    if (disabled) return;
+    if (orbis_syscall(500, 1, s) < 0) disabled = 1;
+}
+
 void boot_mark(const char *stage) {
+    char kl[160];
+    snprintf(kl, sizeof(kl), "[turbodl:%s] %s\n", g_role ? g_role : "?", stage);
+    klog_printf(kl);
     static char chosen[192];
     char path[224];
     if (!chosen[0]) {

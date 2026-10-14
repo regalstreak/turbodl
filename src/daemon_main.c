@@ -8,6 +8,11 @@ int ui_job_action(int id, const char *op) { return job_action(id, op); }
 void ui_set_conns(int n) { (void)n; }
 void ui_set_parallel(int n) { (void)n; }
 
+// runs before main(): tells us whether the process gets that far at all
+__attribute__((constructor)) static void early_mark(void) {
+    klog_printf("[turbodl:daemon] constructor (before main)\n");
+}
+
 int main(void) {
     g_role = "daemon";             // so the breadcrumbs land in boot-daemon.txt
     boot_mark("main entered");
