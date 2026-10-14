@@ -1,4 +1,4 @@
-// Shared by the app (PKDL00001) and the background daemon (PKDL00002).
+// Shared by the app (PKDL00001) and the background service (TRBD00002).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
