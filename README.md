@@ -9,7 +9,7 @@ A multi-connection download manager for jailbroken PS4 (GoldHEN). It downloads f
 ## Features
 
 - **Fast**: aria2-style segmented downloads. A file is split into 16 MB segments fetched over 1–32 connections (default 12) using HTTP Range requests, with a single-connection fallback for servers without Range support.
-- **Parallel**: several downloads at once (default 3, up to 8). Each one uses its own set of connections, and the rest wait in the queue.
+- **Parallel**: several downloads at once (default 4, up to 8). Each one uses its own set of connections, and the rest wait in the queue.
 - **Resumable**: per-segment byte progress is saved every 3 s, so downloads survive pause, closing the app, crashes and reboots.
 - **Background service**: the engine runs as a daemon (`PKDL00002`) that keeps downloading while games are running.
 - **Auto-install**: finished `.pkg` files are installed through the system installer (BGFT). Optionally the pkg is deleted afterwards.
