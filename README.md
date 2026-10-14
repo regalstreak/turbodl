@@ -1,8 +1,37 @@
-<p align="center"><img src="assets_src/icon_1024.png" width="160" alt="TurboDL"></p>
+<p align="center"><img src="assets_src/icon_1024.png" width="150" alt="TurboDL"></p>
 
-# TurboDL
+<h1 align="center">TurboDL</h1>
 
-A multi-connection download manager for jailbroken PS4 (GoldHEN). It downloads files with up to 32 parallel connections, keeps going in the background while you play, and can install `.pkg` files automatically when they finish.
+<p align="center">A multi-connection, resumable download manager and installer for jailbroken PS4 (GoldHEN).<br>
+It downloads with up to 32 connections per file, keeps going in the background while you play, and installs <code>.pkg</code> files automatically when they finish.</p>
+
+<p align="center">
+  <a href="https://github.com/regalstreak/turbodl/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/regalstreak/turbodl?label=Download&style=for-the-badge"></a>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge">
+</p>
+
+## Download
+
+**➡ [Latest release](https://github.com/regalstreak/turbodl/releases/latest)** — download `TurboDL-<version>.pkg` and install it with GoldHEN's package installer (from USB, `/data/pkg`, or any remote pkg installer).
+
+Direct link to the newest build:
+`https://github.com/regalstreak/turbodl/releases/latest/download/TurboDL-1.0.0.pkg`
+
+Requires **GoldHEN** (tested on firmware 12.02).
+
+## Screenshots
+
+| TV — downloads | TV — catalog (search on the console) |
+|---|---|
+| ![TV downloads](docs/screenshots/tv-downloads.png) | ![TV catalog](docs/screenshots/tv-catalog.png) |
+
+| Web panel — desktop | Web panel — mobile |
+|---|---|
+| ![Web panel](docs/screenshots/web-desktop.png) | <img src="docs/screenshots/web-mobile.png" width="290" alt="Web panel on mobile"> |
+
+![Web panel catalog](docs/screenshots/web-catalog.png)
+
+*(Rendered from the real UI code with `make shots`.)*
 
 > **TurboDL is a generic HTTP download manager. It ships no content, links, catalogs or site-specific credentials.** Only download content you have the right to.
 

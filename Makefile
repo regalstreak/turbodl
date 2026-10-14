@@ -131,7 +131,20 @@ host-test: $(BUILD)/index_html.h $(BUILD)/build_id.h
 	  src/util.c src/config.c src/dl.c src/web.c src/catalog.c test/mock_http.c test/host_stubs.c test/host_main.c -o $(BUILD)/host
 	@echo "built $(BUILD)/host - see test/README.md"
 
+# ---- README screenshots: renders the real TV UI code and the real web panel on the host ----
+# Needs freetype and (macOS) sips; on Linux install ImageMagick and use `convert` instead.
+SHOTSFREE := $(shell brew --prefix freetype 2>/dev/null || echo /usr)
+shots: $(BUILD)/font_ttf.h
+	clang -O1 -I test/shots -I $(BUILD) -I src -I $(SHOTSFREE)/include/freetype2 \
+	  -DAPP_DIR='"/tmp/turbodl_shots"' test/shots/ui_shot.c src/util.c test/host_stubs.c \
+	  -o $(BUILD)/ui_shot -L$(SHOTSFREE)/lib -lfreetype
+	mkdir -p /tmp/turbodl_shots docs/screenshots
+	./$(BUILD)/ui_shot docs/screenshots
+	-for f in docs/screenshots/*.bmp; do sips -s format png $$f --out $${f%.bmp} >/dev/null && rm -f $$f; done
+	@echo "web panel shots: start a static server in web/ and run:"
+	@echo "  NODE_PATH=$$(npm root -g) node test/shots/web_shot.js docs/screenshots http://localhost:8099/"
+
 clean:
 	rm -rf $(BUILD) eboot.bin assets/misc pkg.gp4 sce_sys/param.sfo sce_sys/about sce_module $(PKG)
 
-.PHONY: all clean host-test FORCE
+.PHONY: all clean host-test shots FORCE

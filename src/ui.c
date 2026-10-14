@@ -651,11 +651,11 @@ static void draw_footer(void) {
         return;
     }
     if (s_tab == 1)
-        help = "X queue download   SQUARE search   TRIANGLE clear filter   L3 reload list   ARROWS move   OPTIONS: downloads";
+        help = "X queue download   SQUARE search   TRIANGLE clear filter   L3 reload list   ARROWS move";
     else if (s_confirm_del >= 0 && t < s_confirm_until)
         help = "Press SQUARE again to remove this item and delete its file";
     else
-        help = "X pause/resume/retry   TRIANGLE install   SQUARE remove   L1/R1 connections   L2/R2 parallel   OPTIONS: catalog";
+        help = "X pause/resume/retry   TRIANGLE install   SQUARE remove   L1/R1 connections   L2/R2 parallel";
     const char *tabhint = s_tab ? "OPTIONS: downloads" : "OPTIONS: catalog";
     int avail = W - 120 - text_w(F_SMALL, tabhint) - 30;
     text(60, FOOT_TOP + 14, F_SMALL, (s_confirm_del >= 0 && t < s_confirm_until) ? C_AMBER : C_TEXT, help, avail);
