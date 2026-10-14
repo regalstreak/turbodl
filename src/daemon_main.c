@@ -1,4 +1,4 @@
-// PKDL00002: the background service. Lives in /system/vsh/app/PKDL00002, keeps running while games play.
+// TRBD00002: the background service. Lives in /system/vsh/app/TRBD00002, keeps running while games play.
 #include <stdio.h>
 #include "common.h"
 #include "sce.h"

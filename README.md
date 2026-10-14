@@ -40,7 +40,7 @@ Requires **GoldHEN** (tested on firmware 12.02).
 - **Fast**: aria2-style segmented downloads. A file is split into 16 MB segments fetched over 1–32 connections (default 12) using HTTP Range requests, with a single-connection fallback for servers without Range support.
 - **Parallel**: several downloads at once (default 4, up to 8). Each one uses its own set of connections, and the rest wait in the queue.
 - **Resumable**: per-segment byte progress is saved every 3 s, so downloads survive pause, closing the app, crashes and reboots.
-- **Background service**: the engine runs as a daemon (`PKDL00002`) that keeps downloading while games are running.
+- **Background service**: the engine runs as a daemon (`TRBD00002`) that keeps downloading while games are running.
 - **Auto-install**: finished `.pkg` files are installed through the system installer (BGFT). Optionally the pkg is deleted afterwards.
 - **Web panel** at `http://<ps4-ip>:8080` for your phone or PC:
   - add links (several at once)
@@ -107,7 +107,7 @@ curl -Q "RNFR /user/data/pkgdl/config.ini" -Q "RNTO /user/data/turbodl/config.in
 curl -Q "RNFR /user/data/pkgdl/downloads/<file>" -Q "RNTO /user/data/turbodl/downloads/<file>" ftp://<ps4-ip>:2121/
 ```
 
-The app keeps its internal id `PKDL00001` so upgrades install over the previous version instead of creating a second app. The background service is `PKDL00002`.
+The app keeps its internal id `PKDL00001` so upgrades install over the previous version instead of creating a second app. The background service is `TRBD00002` (older builds used `/system/vsh/app/PKDL00002`, which the app removes).
 
 ### Files on the console
 
@@ -119,13 +119,13 @@ The app keeps its internal id `PKDL00001` so upgrades install over the previous 
   cookies.txt     per-site cookies
   queue.txt       queue
   log.txt         log (also at http://<ps4-ip>:8080/log)
-/system/vsh/app/PKDL00002/   background service (installed by the app)
+/system/vsh/app/TRBD00002/   background service (installed by the app)
 ```
 
 ## How it works
 
 ```
- PKDL00001 (app, TV UI) ──HTTP 127.0.0.1:8080──▶ PKDL00002 (daemon)
+ PKDL00001 (app, TV UI) ──HTTP 127.0.0.1:8080──▶ TRBD00002 (daemon)
    installs/updates/starts the daemon               download engine (SceHttp + pthreads)
    mirrors its state on screen                      BGFT installer
                                                     web panel + JSON API
@@ -133,7 +133,7 @@ The app keeps its internal id `PKDL00001` so upgrades install over the previous 
 
 - **HTTP**: the PS4's own `libSceHttp`/`libSceSsl`, no curl port. Redirects are followed manually so that per-site cookies are re-evaluated on every hop.
 - **Install**: `sceBgftServiceIntDownloadRegisterTaskByStorageEx` with the local file path, falling back to the daemon's own HTTP server over loopback.
-- **Daemon**: the app remounts `/system` read-write, copies `daemon.bin` to `/system/vsh/app/PKDL00002/eboot.bin` along with a stock daemon `param.sfo`, then launches it with `sceLncUtilLaunchApp`. This is the same technique Itemzflow uses. Its process registers with `sceSystemServiceRegisterDaemon` and keeps running while games are open.
+- **Daemon**: the app remounts `/system` read-write, copies `daemon.bin` to `/system/vsh/app/TRBD00002/eboot.bin` along with a stock daemon `param.sfo`, then launches it with `sceLncUtilLaunchApp`. This is the same technique Itemzflow uses. Its process registers with `sceSystemServiceRegisterDaemon` and keeps running while games are open.
 - **TV UI**: raw `sceVideoOut` framebuffers and FreeType text with a glyph cache. SDL's PS4 port fails to allocate framebuffers in this setup, so it isn't used.
 
 ### JSON API (daemon, port 8080)

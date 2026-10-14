@@ -21,10 +21,9 @@
 #ifndef BUILD_ID
 #define BUILD_ID    __DATE__ " " __TIME__
 #endif
-// Internal id of the TurboDL background service. Kept as PKDL00002: that folder already exists,
-// and creating a new folder under /system crashed the console.
-#define DAEMON_TID  "PKDL00002"
+#define DAEMON_TID  "TRBD00002"                     // TurboDL background service
 #define DAEMON_DIR  "/system/vsh/app/" DAEMON_TID
+#define OLD_DAEMON_DIR "/system/vsh/app/PKDL00002"   // where older builds installed it
 
 enum {
     J_QUEUED = 0,

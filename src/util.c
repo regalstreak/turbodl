@@ -68,7 +68,7 @@ static int dir_writable(const char *d) {
 int app_dir_writable(void) { return dir_writable(APP_DIR); }
 
 static const char *pick_logdir(void) {
-    static const char *cand[] = {NULL, "/mnt/sandbox/PKDL00002_000", "/data", "/temp0", NULL};
+    static const char *cand[] = {NULL, "/mnt/sandbox/TRBD00002_000", "/data", "/temp0", NULL};
     cand[0] = APP_DIR;
     for (int i = 0; cand[i]; i++)
         if (dir_writable(cand[i])) return cand[i];

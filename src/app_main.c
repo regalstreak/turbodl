@@ -1,4 +1,4 @@
-// PKDL00001: the visible app. Installs/updates/starts the background service (PKDL00002)
+// PKDL00001: the visible app. Installs/updates/starts the background service (TRBD00002)
 // and shows its state on the TV. Falls back to running the engine itself if the daemon can't start.
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +24,9 @@ static void iov_add(struct iovec *iov, int *n, const char *k, const char *v) {
 }
 
 static int remount_system(int rw) {
-    struct iovec iov[16];
+    // 9 key/value pairs = 18 entries. This used to be iov[16]: the overflow overwrote the return
+    // address with 4 (strlen("511")+1) and crashed the app right after "remount /system rw".
+    struct iovec iov[24];
     int n = 0;
     iov_add(iov, &n, "fstype", "exfatfs");
     iov_add(iov, &n, "fspath", "/system");
@@ -107,6 +109,22 @@ static const char *find_daemon_src(void) {
     return NULL;
 }
 
+// The service used to live in PKDL00002. Delete only the files we know about (and two 1-byte
+// test files left by an FTP check), no directory walking.
+static int old_service_present(void) {
+    return file_size(OLD_DAEMON_DIR "/eboot.bin") >= 0 || file_size(OLD_DAEMON_DIR "/sce_sys/param.sfo") >= 0 ||
+           file_size(OLD_DAEMON_DIR "/t.txt") >= 0 || file_size("/system/t.txt") >= 0;
+}
+static void remove_old_service(void) {
+    static const char *files[] = {OLD_DAEMON_DIR "/eboot.bin", OLD_DAEMON_DIR "/eboot.bin.new",
+                                  OLD_DAEMON_DIR "/t.txt", OLD_DAEMON_DIR "/sce_sys/param.sfo",
+                                  "/system/t.txt", NULL};
+    for (int i = 0; files[i]; i++) unlink(files[i]);
+    rmdir(OLD_DAEMON_DIR "/sce_sys");
+    rmdir(OLD_DAEMON_DIR);
+    log_msg(file_size(OLD_DAEMON_DIR "/eboot.bin") < 0 ? "Old service folder removed" : "Old service folder still there");
+}
+
 static int daemon_build_matches(void) {
     char buf[1024];
     if (remote_get("/api/info", buf, sizeof(buf)) != 200) return -1; // not running
@@ -143,8 +161,10 @@ static int daemon_ensure(void) {
 
     const char *src = find_daemon_src();
     if (!src) { log_msg("assets/misc/daemon.bin not found in app"); return 0; }
-    // The pre-rename PKDL00002 folder is deliberately left alone: deleting from it while an old
-    // instance may still run crashed the app. Nothing launches it any more.
+    if (old_service_present()) {
+        log_msg("Removing the old service folder " OLD_DAEMON_DIR);
+        if (remount_system(1) == 0) { remove_old_service(); remount_system(0); }
+    }
     if (!files_equal(src, DAEMON_DIR "/eboot.bin") || file_size(DAEMON_DIR "/sce_sys/param.sfo") <= 0) {
         log_msg("Installing background service to " DAEMON_DIR);
         if (remount_system(1) != 0) { log_msg("remount failed"); return 0; }
