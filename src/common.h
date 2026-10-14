@@ -6,10 +6,10 @@
 #define APP_NAME    "TurboDL"
 #define APP_VERSION "1.00"
 #ifndef APP_DIR
-#define APP_DIR     "/user/data/turbodl"
+#define APP_DIR     "/data/turbodl"   // = /user/data/turbodl; /data also resolves inside a sandbox
 #endif
 #ifndef FPKGI_DIR
-#define FPKGI_DIR   "/user/data/FPKGi"   // optional: read FPKGi-format list files the user already has
+#define FPKGI_DIR   "/data/FPKGi"   // optional: read FPKGi-format list files the user already has
 #endif
 #ifndef WEB_PORT
 #define WEB_PORT    8080
@@ -21,9 +21,10 @@
 #ifndef BUILD_ID
 #define BUILD_ID    __DATE__ " " __TIME__
 #endif
-#define DAEMON_TID  "TRBD00002"                 // TurboDL background service
+// Internal id of the TurboDL background service. Kept as PKDL00002: that folder already exists,
+// and creating a new folder under /system crashed the console.
+#define DAEMON_TID  "PKDL00002"
 #define DAEMON_DIR  "/system/vsh/app/" DAEMON_TID
-#define OLD_DAEMON_DIR "/system/vsh/app/PKDL00002"  // pre-rename installs
 
 enum {
     J_QUEUED = 0,

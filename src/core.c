@@ -1,4 +1,4 @@
-// Shared by the app (PKDL00001) and the background service (TRBD00002).
+// Shared by the app (PKDL00001) and the background service (PKDL00002).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,26 +59,6 @@ int core_jailbreak(void) {
     return r == 0;
 }
 
-// A freshly launched service can block forever inside the jailbreak syscall, so never wait for
-// it: bound the call. Report the outcome and carry on with whatever we got.
-static volatile int s_jb_done = 0, s_jb_ok = 0;
-static void *jb_thread(void *arg) {
-    (void)arg;
-    s_jb_ok = core_jailbreak();
-    s_jb_done = 1;
-    return NULL;
-}
-static int core_jailbreak_bounded(int ms) {
-    pthread_t t;
-    if (thread_start(&t, jb_thread, NULL, 1) != 0) return core_jailbreak();
-    for (int i = 0; i < ms / 50; i++) {
-        if (s_jb_done) return s_jb_ok;
-        sceKernelUsleep(50000);
-    }
-    boot_mark("jailbreak: did not return - continuing without it");
-    return 0;
-}
-
 void ui_status(int loading, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -118,12 +98,13 @@ void core_early_init(const char *role, int with_video) {
     signal(SIGSYS, SIG_IGN); // no GoldHEN -> syscall 500 returns ENOSYS instead of killing us
     ui_status(1, "Starting...");
     boot_mark("boot:start");
-    // The service is launched by LNC and can wedge in the jailbreak (the app never does). Let its
-    // creation finish first, then bound the call: a stuck syscall must not hold up the whole app.
+    // The service hangs forever inside GoldHEN's jailbreak syscall when LNC launches it, and it
+    // does not need it: it is signed with system rights, and /data reaches the data directory
+    // from inside its sandbox. Only the app (which writes to /system) jailbreaks.
     if (strcmp(role, "daemon") == 0) {
-        sceKernelUsleep(1500000);
-        boot_mark("boot:waited for launch to settle");
-        g_jb_ok = core_jailbreak_bounded(6000);
+        boot_mark("boot:service skips the jailbreak");
+        g_jb_ok = app_dir_writable();      // reported as "has file access"
+        boot_mark(g_jb_ok ? "boot:data dir writable" : "boot:data dir NOT writable");
     }
     else g_jb_ok = core_jailbreak();
     // first: gives us the rights to load internal modules

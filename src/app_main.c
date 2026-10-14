@@ -1,4 +1,4 @@
-// PKDL00001: the visible app. Installs/updates/starts the background service (TRBD00002)
+// PKDL00001: the visible app. Installs/updates/starts the background service (PKDL00002)
 // and shows its state on the TV. Falls back to running the engine itself if the daemon can't start.
 #include <stdio.h>
 #include <stdlib.h>

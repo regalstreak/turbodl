@@ -51,12 +51,16 @@ static void *install_thread(void *arg) {
     if (access(j->path, F_OK) != 0) { snprintf(j->err, sizeof(j->err), "file missing"); goto fail; }
     if (!bgft_ready()) { snprintf(j->err, sizeof(j->err), "BGFT init failed (needs GoldHEN/jailbreak)"); goto fail; }
 
-    ret = sceAppInstUtilGetTitleIdFromPkg(j->path, title_id, &is_app);
+    // the system installer runs outside our sandbox: give it the canonical path
+    char sys_path[600];
+    if (!strncmp(j->path, "/data/", 6)) snprintf(sys_path, sizeof(sys_path), "/user%s", j->path);
+    else snprintf(sys_path, sizeof(sys_path), "%s", j->path);
+    ret = sceAppInstUtilGetTitleIdFromPkg(sys_path, title_id, &is_app);
     if (ret) { snprintf(j->err, sizeof(j->err), "not a valid pkg (0x%08X)", ret); goto fail; }
     log_msg("Installing %s (%s)", title_id, j->name);
 
     for (int attempt = 0; attempt < 2; attempt++) {
-        ret = register_task(j->path, j->name, &task);
+        ret = register_task(sys_path, j->name, &task);
         if ((ret == (int)0x80990088 || ret == (int)0x80990015) && g_replace && attempt == 0) {
             log_msg("%s already installed - uninstalling first", title_id);
             int u = sceAppInstUtilAppUnInstall(title_id);
