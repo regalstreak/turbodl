@@ -65,28 +65,6 @@ static int dir_writable(const char *d) {
     return 1;
 }
 
-int is_dir(const char *path) {
-    struct stat st;
-    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-// best effort: delete the files inside a directory, then the directory itself
-void remove_dir(const char *path) {
-    DIR *d = opendir(path);
-    if (d) {
-        struct dirent *e;
-        while ((e = readdir(d))) {
-            if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
-            char p[512];
-            snprintf(p, sizeof(p), "%s/%s", path, e->d_name);
-            if (is_dir(p)) remove_dir(p);
-            else if (unlink(p) != 0) log_msg("unlink %s failed (errno %d)", p, errno);
-        }
-        closedir(d);
-    }
-    if (rmdir(path) != 0) log_msg("rmdir %s failed (errno %d)", path, errno);
-}
-
 int app_dir_writable(void) { return dir_writable(APP_DIR); }
 
 static const char *pick_logdir(void) {

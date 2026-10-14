@@ -112,8 +112,6 @@ void sanitize_name(char *s);
 void name_from_url(const char *url, char *out, size_t n);
 uint64_t now_ms(void);
 int mkdir_p(const char *path);
-int is_dir(const char *path);
-void remove_dir(const char *path);
 int app_dir_writable(void);
 uint64_t disk_free(const char *path);
 
