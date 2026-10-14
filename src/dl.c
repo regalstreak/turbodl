@@ -28,9 +28,11 @@ typedef struct {
     volatile int active_workers;
 } dlctx_t;
 
-static job_t *volatile s_active = NULL;
-
-job_t *dl_active(void) { return s_active; }
+int dl_running(void) {
+    int n = 0;
+    for (int i = 0; i < MAX_JOBS; i++) if (g_jobs[i].used && g_jobs[i].running) n++;
+    return n;
+}
 
 // fill j->done from the on-disk resume state (for display after restart)
 void dl_peek_progress(job_t *j) {
@@ -458,22 +460,34 @@ out:
     pthread_mutex_destroy(&d.lock);
 }
 
+static void *job_thread(void *arg) {
+    job_t *j = arg;
+    if (j->state == J_QUEUED && !g_quitting) run_download(j); // may have been paused/removed meanwhile
+    j->running = 0;
+    if (j->del_req) { j->del_req = 0; job_delete(j); }
+    return NULL;
+}
+
+// starts queued jobs (in queue order) while fewer than g_max_parallel are running
 static void *scheduler(void *arg) {
     (void)arg;
     for (;;) {
+        sceKernelUsleep(300000);
+        if (g_quitting) continue;
+        int lim = g_max_parallel < 1 ? 1 : (g_max_parallel > MAX_PARALLEL ? MAX_PARALLEL : g_max_parallel);
         job_t *pick = NULL;
         pthread_mutex_lock(&g_lock);
-        for (int i = 0; i < MAX_JOBS; i++) {
-            job_t *j = &g_jobs[i];
-            if (j->used && j->state == J_QUEUED && !j->del_req) { pick = j; break; }
+        int running = 0;
+        for (int i = 0; i < MAX_JOBS; i++) if (g_jobs[i].used && g_jobs[i].running) running++;
+        if (running < lim) {
+            for (int i = 0; i < MAX_JOBS; i++) {
+                job_t *j = &g_jobs[i];
+                if (j->used && !j->running && j->state == J_QUEUED && !j->del_req) { pick = j; break; }
+            }
+            if (pick) pick->running = 1;
         }
-        if (pick) s_active = pick;
         pthread_mutex_unlock(&g_lock);
-
-        if (!pick || g_quitting) { s_active = NULL; sceKernelUsleep(500000); continue; }
-        run_download(pick);
-        s_active = NULL;
-        if (pick->del_req) { pick->del_req = 0; job_delete(pick); }
+        if (pick && thread_start(NULL, job_thread, pick, 1) != 0) pick->running = 0;
     }
     return NULL;
 }

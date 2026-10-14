@@ -17,6 +17,7 @@
 #define MAX_JOBS    64
 #define CHUNK_SIZE  (16ULL * 1024 * 1024)
 #define MAX_CONNS   32
+#define MAX_PARALLEL 8
 #ifndef BUILD_ID
 #define BUILD_ID    __DATE__ " " __TIME__
 #endif
@@ -48,6 +49,7 @@ typedef struct {
     int auto_install;
     volatile int stop;            // ask active download to stop
     volatile int del_req;         // delete after stop
+    volatile int running;         // a download thread owns this job
 } job_t;
 
 // globals (main.c)
@@ -58,7 +60,8 @@ extern int g_conns;
 extern int g_auto_install;
 extern int g_delete_after;
 extern int g_replace;
-extern int g_notify_step;   // progress popup every N % (0 = off)
+extern int g_notify_step;
+extern int g_max_parallel;  // downloads running at the same time   // progress popup every N % (0 = off)
 extern int g_jb_ok;
 extern int g_net_ok;
 extern char g_ip[32];
@@ -87,6 +90,7 @@ int  remote_log_lines(char out[][160], int max);
 int  job_action(int id, const char *op);
 int  ui_job_action(int id, const char *op);
 void ui_set_conns(int n);
+void ui_set_parallel(int n);
 
 // util.c
 // PS4 default pthread stacks are tiny: always create threads through this (1 MB stack)
@@ -129,7 +133,7 @@ void http_close(hctx_t *h, int keep_conn);
 
 // dl.c
 void dl_start(void);
-job_t *dl_active(void);
+int  dl_running(void);        // number of downloads in progress
 void dl_peek_progress(job_t *j);
 
 // install.c

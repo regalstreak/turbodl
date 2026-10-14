@@ -144,6 +144,7 @@ static void *sync_thread(void *arg) {
         }
         if (tick % 4 == 0 && remote_get("/api/info", buf, sizeof(buf)) == 200) {
             g_conns = (int)json_num(buf, "conns");
+            g_max_parallel = (int)json_num(buf, "parallel");
             g_jb_ok = json_bool(buf, "jb");
             g_net_ok = json_bool(buf, "net");
             if (json_bool(buf, "cookie")) { if (!g_cookie[0]) strcpy(g_cookie, "set"); }
@@ -167,6 +168,16 @@ int ui_job_action(int id, const char *op) {
     char body[64];
     snprintf(body, sizeof(body), "id=%d&op=%s", id, op);
     return remote_post("/api/job", body, NULL, 0) == 200 ? 0 : -1;
+}
+
+void ui_set_parallel(int n) {
+    if (n < 1) n = 1;
+    if (n > MAX_PARALLEL) n = MAX_PARALLEL;
+    g_max_parallel = n;
+    if (!g_remote) { config_save(); return; }
+    char body[32];
+    snprintf(body, sizeof(body), "parallel=%d", n);
+    remote_post("/api/settings", body, NULL, 0);
 }
 
 void ui_set_conns(int n) {

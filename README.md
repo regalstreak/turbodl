@@ -9,6 +9,7 @@ A multi-connection download manager for jailbroken PS4 (GoldHEN). It downloads f
 ## Features
 
 - **Fast**: aria2-style segmented downloads. A file is split into 16 MB segments fetched over 1–32 connections (default 12) using HTTP Range requests, with a single-connection fallback for servers without Range support.
+- **Parallel**: several downloads at once (default 3, up to 8). Each one uses its own set of connections, and the rest wait in the queue.
 - **Resumable**: per-segment byte progress is saved every 3 s, so downloads survive pause, closing the app, crashes and reboots.
 - **Background service**: the engine runs as a daemon (`PKDL00002`) that keeps downloading while games are running.
 - **Auto-install**: finished `.pkg` files are installed through the system installer (BGFT). Optionally the pkg is deleted afterwards.
@@ -42,7 +43,8 @@ After a reboot, open TurboDL once to start the background service again.
 | ✕ | pause / resume / retry |
 | △ | install the selected (finished) pkg |
 | □ ×2 | remove item and delete its file |
-| L1 / R1 | fewer / more connections |
+| L1 / R1 | fewer / more connections per download |
+| L2 / R2 | fewer / more parallel downloads |
 | ↑ / ↓ | select |
 
 ### Cookies for login-protected downloads
@@ -67,7 +69,8 @@ No lists are included.
 ```
 /user/data/pkgdl/
   downloads/      downloaded files (+ .dlstate resume files)
-  config.ini      connections, auto_install, delete_after_install, replace_installed, notify_progress_step
+  config.ini      connections, max_parallel_downloads, auto_install, delete_after_install,
+                  replace_installed, notify_progress_step
   cookies.txt     per-site cookies
   queue.txt       queue
   log.txt         log (also at http://<ps4-ip>:8080/log)
@@ -97,7 +100,7 @@ No lists are included.
 | POST | `/api/add` | `urls` (newline-separated), `name`, `auto` |
 | POST | `/api/job` | `id`, `op` = `pause`/`resume`/`retry`/`install`/`delete` |
 | POST | `/api/cookie` | `domain`, `cookie` (empty = remove) |
-| POST | `/api/settings` | `conns`, `auto`, `del`, `replace`, `notify` |
+| POST | `/api/settings` | `conns`, `parallel`, `auto`, `del`, `replace`, `notify` |
 | POST | `/api/install_path` | `path` of a pkg already on the console |
 | POST | `/api/launch`, `/api/kill` | `tid` (title id) |
 | POST | `/api/quit` | stop the daemon (queue is resumed on next start) |

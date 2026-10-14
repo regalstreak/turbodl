@@ -28,10 +28,13 @@ void config_load(void) {
         else if (!strcmp(k, "delete_after_install")) g_delete_after = iv;
         else if (!strcmp(k, "replace_installed")) g_replace = iv;
         else if (!strcmp(k, "notify_progress_step")) g_notify_step = iv;
+        else if (!strcmp(k, "max_parallel_downloads")) g_max_parallel = iv;
     }
     fclose(f);
     if (g_conns < 1) g_conns = 1;
     if (g_conns > MAX_CONNS) g_conns = MAX_CONNS;
+    if (g_max_parallel < 1) g_max_parallel = 1;
+    if (g_max_parallel > MAX_PARALLEL) g_max_parallel = MAX_PARALLEL;
 }
 
 void config_save(void) {
@@ -44,6 +47,8 @@ void config_save(void) {
     fprintf(f, "replace_installed=%d\n", g_replace);
     fprintf(f, "# popup notification every N percent while downloading (0 = off)\n");
     fprintf(f, "notify_progress_step=%d\n", g_notify_step);
+    fprintf(f, "# downloads running at the same time (1-%d); connections= applies to each\n", MAX_PARALLEL);
+    fprintf(f, "max_parallel_downloads=%d\n", g_max_parallel);
     fclose(f);
 }
 

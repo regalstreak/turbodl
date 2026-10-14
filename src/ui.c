@@ -213,9 +213,12 @@ static void draw(void) {
     int hx = W - 60 - text_w(F_MED, b);
     text(hx, 18, F_MED, C_BLUE, b, 0);
     fmt_bytes(a1, sizeof(a1), disk_free(APP_DIR));
-    snprintf(b, sizeof(b), "%s   free %s   conns %d   cookie %s   jailbreak %s   net %s",
-             g_remote ? "BACKGROUND MODE (keeps downloading in games)" : "in-app mode",
-             a1, g_conns, g_cookie[0] ? "yes" : "NO", g_jb_ok ? "yes" : "NO", g_net_ok ? "ok" : "FAIL");
+    uint64_t total = 0;
+    for (int i = 0; i < MAX_JOBS; i++) if (g_jobs[i].used && g_jobs[i].state == J_DOWNLOADING) total += g_jobs[i].speed;
+    fmt_bytes(a2, sizeof(a2), total);
+    snprintf(b, sizeof(b), "%s   %s/s   free %s   %d x %d conns   cookies %s   jb %s   net %s",
+             g_remote ? "BACKGROUND MODE" : "in-app mode", a2,
+             a1, g_max_parallel, g_conns, g_cookie[0] ? "yes" : "-", g_jb_ok ? "yes" : "NO", g_net_ok ? "ok" : "FAIL");
     text(W - 60 - text_w(F_SMALL, b), 64, F_SMALL, C_MUTED, b, 0);
 
     // jobs
@@ -286,7 +289,7 @@ static void draw(void) {
     rect(0, H - 60, W, 60, C_PANEL);
     const char *help = (s_confirm_del >= 0 && now_ms() < s_confirm_until)
         ? "Press SQUARE again to remove this item and delete its file"
-        : "X pause/resume/retry    TRIANGLE install    SQUARE remove    L1/R1 connections -/+    UP/DOWN select";
+        : "X pause/resume/retry   TRIANGLE install   SQUARE remove   L1/R1 connections   L2/R2 parallel   UP/DOWN select";
     text(60, H - 46, F_SMALL, (s_confirm_del >= 0 && now_ms() < s_confirm_until) ? C_AMBER : C_TEXT, help, 0);
 }
 
@@ -317,6 +320,8 @@ static void input(void) {
     if (s_sel < 0) s_sel = 0;
     if (pressed & PAD_L1 && g_conns > 1) ui_set_conns(g_conns - 1);
     if (pressed & PAD_R1 && g_conns < MAX_CONNS) ui_set_conns(g_conns + 1);
+    if (pressed & PAD_L2 && g_max_parallel > 1) ui_set_parallel(g_max_parallel - 1);
+    if (pressed & PAD_R2 && g_max_parallel < MAX_PARALLEL) ui_set_parallel(g_max_parallel + 1);
     if (!n) return;
     job_t *j = &g_jobs[ids[s_sel]];
     if (pressed & PAD_CROSS) ui_job_action(j->id, "toggle");

@@ -43,7 +43,8 @@ th{color:#8b95a7;font-weight:500}td.sz{white-space:nowrap;color:#8b95a7}
 <div class="row"><input id="cd" placeholder="domain, e.g. example.com" style="min-width:220px"></div>
 <textarea id="ck" placeholder="name=value; other=value; ..."></textarea>
 <div class="row"><button onclick="setCookie()">Save cookie</button><span id="cks" class="muted"></span></div>
-<div class="row">Connections <input id="cn" type="number" min="1" max="32" style="width:70px">
+<div class="row">Parallel downloads <input id="pp" type="number" min="1" max="8" style="width:60px">
+Connections per download <input id="cn" type="number" min="1" max="32" style="width:70px">
 <label><input type="checkbox" id="sa"> Auto-install</label>
 <label><input type="checkbox" id="sd"> Delete pkg after install</label>
 <label><input type="checkbox" id="sr"> Replace if already installed</label>
@@ -80,12 +81,12 @@ async function poll(){if(polling)return;polling=true;try{
   ${j.err?`<div class="m err">${esc(j.err)}</div>`:''}<div class="bar ${cls}"><i style="width:${pct}%"></i></div><div class="row">${b.join('')}</div></div>`}).join('');
 }catch(e){}finally{polling=false}}
 async function info(){try{const i=await (await fetch('/api/info')).json();
- $('hdr').textContent=`${esc(location.host)} · free ${fb(i.free)} · ${i.conns} conns · cookies ${i.cookie?'✓':'–'} · jailbreak ${i.jb?'✓':'✗'}`;
+ $('hdr').textContent=`${esc(location.host)} · free ${fb(i.free)} · ${i.parallel}×${i.conns} conns · cookies ${i.cookie?'✓':'–'} · jailbreak ${i.jb?'✓':'✗'}`;
  $('cks').textContent=i.cookies?('cookies saved for: '+i.cookies):'no site cookies saved';
  if(document.activeElement.id!=='sn')$('sn').value=i.notify;
- if(document.activeElement.id!=='cn')$('cn').value=i.conns;$('sa').checked=!!i.auto;$('sd').checked=!!i.del;$('sr').checked=!!i.replace;}catch(e){}}
+ if(document.activeElement.id!=='cn')$('cn').value=i.conns;if(document.activeElement.id!=='pp')$('pp').value=i.parallel;$('sa').checked=!!i.auto;$('sd').checked=!!i.del;$('sr').checked=!!i.replace;}catch(e){}}
 async function setCookie(){const d=$('cd').value.trim();if(!d){alert('Enter the domain the cookie belongs to');return}const r=await post('/api/cookie',{domain:d,cookie:$('ck').value});if(r!=='ok')alert(r);$('ck').value='';info()}
-async function saveSet(){await post('/api/settings',{conns:$('cn').value,auto:$('sa').checked?1:0,del:$('sd').checked?1:0,replace:$('sr').checked?1:0,notify:$('sn').value});info()}
+async function saveSet(){await post('/api/settings',{conns:$('cn').value,auto:$('sa').checked?1:0,del:$('sd').checked?1:0,replace:$('sr').checked?1:0,notify:$('sn').value,parallel:$('pp').value});info()}
 let cat=[];
 async function loadCat(){$('cat').innerHTML='<span class="muted">Loading…</span>';cat=[];
  try{const r=await fetch('/api/catalog?t='+$('ct').value);if(!r.ok)throw 0;const d=await r.json();

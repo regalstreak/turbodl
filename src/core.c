@@ -15,6 +15,7 @@ int g_auto_install = 1;
 int g_delete_after = 1;
 int g_replace = 0;
 int g_notify_step = 10;
+int g_max_parallel = 3;
 int g_jb_ok = 0;
 int g_net_ok = 0;
 volatile int g_quitting = 0;

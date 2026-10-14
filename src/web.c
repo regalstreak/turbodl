@@ -82,7 +82,7 @@ static int file_complete(job_t *j) {
 int job_action(int id, const char *op) {
     job_t *j = job_get(id);
     if (!j) return -1;
-    int active = dl_active() == j;
+    int active = j->running;
     if (!strcmp(op, "pause")) {
         if (j->state == J_DOWNLOADING || j->state == J_QUEUED) {
             j->state = J_PAUSED;
@@ -140,8 +140,8 @@ static void api_jobs(int fd) {
 static void api_info(int fd) {
     char b[1024 + 8192];
     int n = snprintf(b, sizeof(b),
-        "{\"notify\":%d,\"cookies\":\"%s\",\"ip\":\"%s\",\"conns\":%d,\"cookie\":%s,\"jb\":%s,\"free\":%llu,\"auto\":%d,\"del\":%d,\"replace\":%d,\"ver\":\"%s\",\"build\":\"%s\",\"role\":\"%s\",\"net\":%s}",
-        g_notify_step, g_cookie, g_ip, g_conns, g_cookie[0] ? "true" : "false", g_jb_ok ? "true" : "false",
+        "{\"parallel\":%d,\"notify\":%d,\"cookies\":\"%s\",\"ip\":\"%s\",\"conns\":%d,\"cookie\":%s,\"jb\":%s,\"free\":%llu,\"auto\":%d,\"del\":%d,\"replace\":%d,\"ver\":\"%s\",\"build\":\"%s\",\"role\":\"%s\",\"net\":%s}",
+        g_max_parallel, g_notify_step, g_cookie, g_ip, g_conns, g_cookie[0] ? "true" : "false", g_jb_ok ? "true" : "false",
         (unsigned long long)disk_free(APP_DIR), g_auto_install, g_delete_after, g_replace, APP_VERSION,
         BUILD_ID, g_role, g_net_ok ? "true" : "false");
     respond(fd, 200, "application/json", b, (size_t)n);
@@ -172,9 +172,8 @@ static void api_logtail(int fd) {
 
 static void *quit_thread(void *arg) {
     (void)arg;
-    job_t *a = dl_active();
-    if (a) a->stop = 1;
-    for (int i = 0; i < 100 && dl_active(); i++) sceKernelUsleep(100000);
+    for (int i = 0; i < MAX_JOBS; i++) if (g_jobs[i].used && g_jobs[i].running) g_jobs[i].stop = 1;
+    for (int i = 0; i < 100 && dl_running(); i++) sceKernelUsleep(100000);
     queue_save();
     log_msg("Daemon exiting (requested)");
     sceKernelUsleep(300000);
@@ -362,6 +361,8 @@ static void handle(int fd) {
         if (get_param(body, "del", v2, sizeof(v2))) g_delete_after = atoi(v2);
         if (get_param(body, "replace", v2, sizeof(v2))) g_replace = atoi(v2);
         if (get_param(body, "notify", v2, sizeof(v2))) g_notify_step = atoi(v2) < 0 ? 0 : atoi(v2);
+        if (get_param(body, "parallel", v2, sizeof(v2)) && atoi(v2) > 0)
+            g_max_parallel = atoi(v2) > MAX_PARALLEL ? MAX_PARALLEL : atoi(v2);
         config_save();
         respond_str(fd, 200, "ok");
     } else if (!strcmp(path, "/api/catalog")) {

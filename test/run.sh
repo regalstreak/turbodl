@@ -27,3 +27,18 @@ p3=$(st | cut -d' ' -f2); [ "$p3" -ge "$p1" ] && pass "crash + restart resumes (
 wait_state 5 || fail "download didn't finish"
 cmp -s "$D/srv/Test File [v1].pkg" "$D/app/downloads/Test File _v1_.pkg" && pass "file is byte-identical" || fail "corrupt file"
 grep -q "AddressSanitizer\|runtime error" "$D/host.log" && fail "sanitizer errors (see $D/host.log)" || pass "no ASan/UBSan errors"
+
+# ---- parallel downloads: limit 2 -> 2 running + 1 queued, all complete intact ----
+for n in A B C; do python3 -c "import os;open('$D/srv/par$n.bin','wb').write(os.urandom(120*1024*1024))"; done
+curl -s -d parallel=2 -d conns=4 $W/api/settings >/dev/null
+curl -s --data-urlencode "urls=http://127.0.0.1:9555/download/parA.bin
+http://127.0.0.1:9555/download/parB.bin
+http://127.0.0.1:9555/download/parC.bin" -d auto=0 $W/api/add >/dev/null
+sleep 2.5
+nd=$(curl -s $W/api/jobs.tsv | awk -F'\t' '$7 ~ /^par/ && $2==1' | wc -l | tr -d ' ')
+nq=$(curl -s $W/api/jobs.tsv | awk -F'\t' '$7 ~ /^par/ && $2==0' | wc -l | tr -d ' ')
+[ "$nd" = 2 ] && [ "$nq" = 1 ] && pass "parallel limit: 2 downloading, 1 queued" || fail "parallel ($nd downloading, $nq queued)"
+for _ in $(seq 1 120); do [ "$(curl -s $W/api/jobs.tsv | awk -F'\t' '$7 ~ /^par/ && $2==3' | wc -l | tr -d ' ')" = 3 ] && break; sleep 1; done
+ok=1; for n in A B C; do cmp -s "$D/srv/par$n.bin" "$D/app/downloads/par$n.bin" || ok=0; done
+[ $ok = 1 ] && pass "3 parallel files byte-identical" || fail "parallel files corrupt/incomplete"
+grep -q "AddressSanitizer\|runtime error" "$D/host.log" && fail "sanitizer errors after parallel run" || pass "no sanitizer errors after parallel run"

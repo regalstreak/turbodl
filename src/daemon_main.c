@@ -6,6 +6,7 @@
 int g_remote = 0;
 int ui_job_action(int id, const char *op) { return job_action(id, op); }
 void ui_set_conns(int n) { (void)n; }
+void ui_set_parallel(int n) { (void)n; }
 
 int main(void) {
     core_early_init("daemon", 0);
