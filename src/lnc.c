@@ -43,16 +43,25 @@ int lnc_running(const char *tid) {
     return ((unsigned)id & ~0xFFFFFFu) == 0x60000000u;
 }
 
-// stop it and wait until it is really gone (an executing eboot.bin cannot be overwritten)
-int lnc_stop(const char *tid) {
+static void *kill_thread(void *arg) {
+    const char *tid = arg;
+    log_msg("kill thread: asking %s to die", tid);
+    lnc_kill(tid);                 // may block on a wedged process; harmless in a detached thread
+    return NULL;
+}
+
+// Ask it to die from a detached thread and wait briefly. Never blocks the caller for long,
+// because sceLncUtilKillApp can hang on a process that is itself stuck.
+int lnc_stop(const char *tid, int wait_ms) {
     if (!lnc_running(tid)) return 1;
-    log_msg("Stopping old %s process...", tid);
-    lnc_kill(tid);
-    for (int i = 0; i < 100; i++) {              // up to 10 s
+    log_msg("Asking old %s process to stop", tid);
+    pthread_t t;
+    thread_start(&t, kill_thread, (void *)tid, 1);
+    for (int i = 0; i < wait_ms / 100; i++) {
         sceKernelUsleep(100000);
         if (!lnc_running(tid)) { log_msg("%s stopped", tid); return 1; }
     }
-    log_msg("%s is still running after kill", tid);
+    log_msg("%s did not stop (still running)", tid);
     return 0;
 }
 

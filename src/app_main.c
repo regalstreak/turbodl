@@ -133,13 +133,18 @@ static int daemon_ensure(void) {
         remote_post("/api/quit", "", NULL, 0);
         wait_daemon(0, 8000);
     }
-    // an old process would keep its eboot.bin busy (ETXTBSY) and hold port 8080: make sure it is gone
+    // An old process keeps its eboot.bin busy (ETXTBSY) and may be wedged. Try to stop it, but
+    // never wait long: we can still replace the file, and the launch step reports the rest.
     if (lnc_running(DAEMON_TID)) {
         ui_status(1, "Stopping old background service...");
         remote_post("/api/quit", "", NULL, 0);
         sceKernelUsleep(500000);
-        if (lnc_running(DAEMON_TID)) lnc_stop(DAEMON_TID);
-        sceKernelUsleep(300000);
+        if (lnc_running(DAEMON_TID)) {
+            if (!lnc_stop(DAEMON_TID, 3000)) {
+                log_msg("Old service is wedged; its file can still be replaced, but launching a new");
+                log_msg("instance may be refused until the console is restarted once.");
+            }
+        }
     }
     if (!g_jb_ok) { log_msg("no jailbreak -> can't install background service"); return 0; }
 
@@ -157,7 +162,7 @@ static int daemon_ensure(void) {
         if (!ok) { log_msg("copying daemon files failed"); return 0; }
     }
     for (int attempt = 0; attempt < 2; attempt++) {
-        if (attempt) lnc_stop(DAEMON_TID);   // a leftover process would block the new one
+        if (attempt) lnc_stop(DAEMON_TID, 3000);   // a leftover process would block the new one
         ui_status(1, "Starting background service%s...", attempt ? " (retry)" : "");
         int r = lnc_launch(DAEMON_TID);
         if (r < 0 && (unsigned)r != 0x8094000Cu /* already running */) log_msg("daemon launch failed 0x%08X", r);
@@ -166,6 +171,7 @@ static int daemon_ensure(void) {
         klog_printf("[turbodl] app: daemon did not answer");
         klog_printf(attempt ? "[turbodl] app: giving up, will run in-app" : "[turbodl] app: retrying daemon");
     }
+    log_msg("Background service unavailable - once the console is restarted, open TurboDL again");
     return 0;
 }
 
