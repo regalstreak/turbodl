@@ -37,7 +37,8 @@ static int remount_system(int rw) {
     iov_add(iov, &n, "mask", "511");
     uint64_t flags = 0x10000ULL /* MNT_UPDATE */ | (rw ? 0 : 1ULL /* MNT_RDONLY */);
     int r = orbis_syscall(378, iov, n, flags);
-    log_msg("remount /system %s -> %d (errno %d)", rw ? "rw" : "ro", r, errno);
+    if (r == 0) log_msg("remount /system %s: ok", rw ? "rw" : "ro");
+    else log_msg("remount /system %s: FAILED 0x%08X (errno %d)", rw ? "rw" : "ro", r, errno);
     return r;
 }
 
@@ -142,6 +143,14 @@ static int daemon_ensure(void) {
 
     const char *src = find_daemon_src();
     if (!src) { log_msg("assets/misc/daemon.bin not found in app"); return 0; }
+    // older builds installed the service as PKDL00002; leave no stray app directory behind
+    if (is_dir(OLD_DAEMON_DIR)) {
+        log_msg("Removing the old service directory %s", OLD_DAEMON_DIR);
+        if (remount_system(1) == 0) {
+            remove_dir(OLD_DAEMON_DIR);
+            remount_system(0);
+        }
+    }
     if (!files_equal(src, DAEMON_DIR "/eboot.bin") || file_size(DAEMON_DIR "/sce_sys/param.sfo") <= 0) {
         log_msg("Installing background service to " DAEMON_DIR);
         if (remount_system(1) != 0) { log_msg("remount failed"); return 0; }

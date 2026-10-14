@@ -21,8 +21,9 @@
 #ifndef BUILD_ID
 #define BUILD_ID    __DATE__ " " __TIME__
 #endif
-#define DAEMON_TID  "PKDL00002"
+#define DAEMON_TID  "TRBD00002"                 // TurboDL background service
 #define DAEMON_DIR  "/system/vsh/app/" DAEMON_TID
+#define OLD_DAEMON_DIR "/system/vsh/app/PKDL00002"  // pre-rename installs
 
 enum {
     J_QUEUED = 0,
@@ -111,6 +112,9 @@ void sanitize_name(char *s);
 void name_from_url(const char *url, char *out, size_t n);
 uint64_t now_ms(void);
 int mkdir_p(const char *path);
+int is_dir(const char *path);
+void remove_dir(const char *path);
+int app_dir_writable(void);
 uint64_t disk_free(const char *path);
 
 // config / queue (config.c)

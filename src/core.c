@@ -51,7 +51,32 @@ struct jailbreak_backup {
 int core_jailbreak(void) {
     static struct jailbreak_backup bk;
     // GoldHEN SDK: syscall 500, cmd 2 = jailbreak
-    return orbis_syscall(500, 2, &bk) == 0;
+    boot_mark("jailbreak: calling");
+    int r = orbis_syscall(500, 2, &bk);
+    char m[64];
+    snprintf(m, sizeof(m), "jailbreak: returned %d", r);
+    boot_mark(m);
+    return r == 0;
+}
+
+// A freshly launched service can block forever inside the jailbreak syscall, so never wait for
+// it: bound the call. Report the outcome and carry on with whatever we got.
+static volatile int s_jb_done = 0, s_jb_ok = 0;
+static void *jb_thread(void *arg) {
+    (void)arg;
+    s_jb_ok = core_jailbreak();
+    s_jb_done = 1;
+    return NULL;
+}
+static int core_jailbreak_bounded(int ms) {
+    pthread_t t;
+    if (thread_start(&t, jb_thread, NULL, 1) != 0) return core_jailbreak();
+    for (int i = 0; i < ms / 50; i++) {
+        if (s_jb_done) return s_jb_ok;
+        sceKernelUsleep(50000);
+    }
+    boot_mark("jailbreak: did not return - continuing without it");
+    return 0;
 }
 
 void ui_status(int loading, const char *fmt, ...) {
@@ -93,8 +118,16 @@ void core_early_init(const char *role, int with_video) {
     signal(SIGSYS, SIG_IGN); // no GoldHEN -> syscall 500 returns ENOSYS instead of killing us
     ui_status(1, "Starting...");
     boot_mark("boot:start");
-    g_jb_ok = core_jailbreak();
-    boot_mark(g_jb_ok ? "boot:jailbreak ok" : "boot:jailbreak FAILED"); // first: gives us the rights to load internal modules
+    // The service is launched by LNC and can wedge in the jailbreak (the app never does). Let its
+    // creation finish first, then bound the call: a stuck syscall must not hold up the whole app.
+    if (strcmp(role, "daemon") == 0) {
+        sceKernelUsleep(1500000);
+        boot_mark("boot:waited for launch to settle");
+        g_jb_ok = core_jailbreak_bounded(6000);
+    }
+    else g_jb_ok = core_jailbreak();
+    // first: gives us the rights to load internal modules
+    boot_mark(g_jb_ok ? "boot:jailbreak ok" : "boot:jailbreak FAILED");
     core_load_modules(with_video);
     boot_mark("boot:modules done");
     mkdir_p(APP_DIR "/downloads");
@@ -121,6 +154,13 @@ int core_start_engine(int wait_ms, int defer_if_busy) {
     cookie_load();
     queue_load();
     ui_status(1, "Connecting...");
+    // Without the jailbreak a service cannot see the data directory, so it would own the port and
+    // download nothing. Step aside instead and let the app run the engine.
+    if (strcmp(g_role, "daemon") == 0 && !app_dir_writable()) {
+        boot_mark("data dir not writable - service exiting so the app can run");
+        log_msg("Cannot write " APP_DIR " (no jailbreak?) - background service exiting");
+        _exit(0);
+    }
     log_msg("init: network");
     boot_mark("boot:net init");
     if (http_global_init() == 0) g_net_ok = 1;

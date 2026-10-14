@@ -9,6 +9,7 @@ void ui_set_conns(int n) { (void)n; }
 void ui_set_parallel(int n) { (void)n; }
 
 int main(void) {
+    g_role = "daemon";             // so the breadcrumbs land in boot-daemon.txt
     boot_mark("main entered");
     core_early_init("daemon", 0);
     int r = sceSystemServiceRegisterDaemon();

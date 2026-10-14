@@ -32,19 +32,21 @@ static pthread_mutex_t s_log_lock = PTHREAD_MUTEX_INITIALIZER;
 // Breadcrumbs for the background service: written with raw I/O to the first writable
 // location, because a daemon may start before it can reach its data directory.
 void boot_mark(const char *stage) {
-    static const char *chosen = NULL;
-    if (!chosen) {
-        static const char *cand[] = {APP_DIR "/boot.txt", "/mnt/sandbox/PKDL00002_000/boot.txt",
-                                     "/data/boot.txt", "/temp0/boot.txt", NULL};
-        for (int i = 0; cand[i]; i++) {
-            int fd = open(cand[i], O_WRONLY | O_CREAT | O_APPEND, 0666);
-            if (fd >= 0) { close(fd); chosen = cand[i]; break; }
+    static char chosen[192];
+    char path[224];
+    if (!chosen[0]) {
+        const char *dirs[] = {APP_DIR, "/data", "/temp0", NULL};
+        const char *role = g_role ? g_role : "unknown";
+        for (int i = 0; dirs[i]; i++) {
+            snprintf(path, sizeof(path), "%s/boot-%s.txt", dirs[i], role);
+            int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+            if (fd >= 0) { close(fd); snprintf(chosen, sizeof(chosen), "%s", path); break; }
         }
-        if (!chosen) return;
+        if (!chosen[0]) return;
     }
     int fd = open(chosen, O_WRONLY | O_CREAT | O_APPEND, 0666);
     if (fd < 0) return;
-    char line[128];
+    char line[192];
     int n = snprintf(line, sizeof(line), "%llu %s\n", (unsigned long long)now_ms(), stage);
     if (n > 0) { ssize_t w = write(fd, line, (size_t)n); (void)w; }
     close(fd);
@@ -63,8 +65,32 @@ static int dir_writable(const char *d) {
     return 1;
 }
 
+int is_dir(const char *path) {
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// best effort: delete the files inside a directory, then the directory itself
+void remove_dir(const char *path) {
+    DIR *d = opendir(path);
+    if (d) {
+        struct dirent *e;
+        while ((e = readdir(d))) {
+            if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+            char p[512];
+            snprintf(p, sizeof(p), "%s/%s", path, e->d_name);
+            if (is_dir(p)) remove_dir(p);
+            else if (unlink(p) != 0) log_msg("unlink %s failed (errno %d)", p, errno);
+        }
+        closedir(d);
+    }
+    if (rmdir(path) != 0) log_msg("rmdir %s failed (errno %d)", path, errno);
+}
+
+int app_dir_writable(void) { return dir_writable(APP_DIR); }
+
 static const char *pick_logdir(void) {
-    static const char *cand[] = {NULL, "/mnt/sandbox/PKDL00002_000", "/data", "/temp0", NULL};
+    static const char *cand[] = {NULL, "/mnt/sandbox/TRBD00002_000", "/data", "/temp0", NULL};
     cand[0] = APP_DIR;
     for (int i = 0; cand[i]; i++)
         if (dir_writable(cand[i])) return cand[i];
