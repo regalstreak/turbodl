@@ -1,0 +1,18 @@
+// PKDL00002: background daemon. Lives in /system/vsh/app/PKDL00002, keeps running while games play.
+#include <stdio.h>
+#include "common.h"
+#include "sce.h"
+
+int g_remote = 0;
+int ui_job_action(int id, const char *op) { return job_action(id, op); }
+void ui_set_conns(int n) { (void)n; }
+
+int main(void) {
+    core_early_init("daemon", 0);
+    int r = sceSystemServiceRegisterDaemon();
+    log_msg("RegisterDaemon -> 0x%08X", r);
+    core_start_engine();
+    notify("PKG Downloader running in background: http://%s:%d", g_ip, WEB_PORT);
+    for (;;) sceKernelUsleep(1000000);
+    return 0;
+}

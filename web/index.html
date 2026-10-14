@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TurboDL</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;background:#0f1218;color:#e6e9ef}
+header{padding:14px 18px;background:#161b24;border-bottom:1px solid #252c38;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}header .s{color:#8b95a7;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:#161b24;border:1px solid #252c38;border-radius:10px;padding:14px;margin-bottom:16px}
+h2{font-size:15px;margin:0 0 10px}
+textarea,input,select{background:#0f1218;color:#e6e9ef;border:1px solid #2e3747;border-radius:6px;padding:8px;font:inherit}
+textarea{width:100%;min-height:70px;resize:vertical}
+button{background:#2f6fec;color:#fff;border:0;border-radius:6px;padding:7px 12px;font:inherit;cursor:pointer}
+button.g{background:#2a3242}button.r{background:#a33}button:disabled{opacity:.4}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.job{border-top:1px solid #252c38;padding:10px 0}.job:first-child{border-top:0}
+.job .n{font-weight:600;word-break:break-all}.job .m{color:#8b95a7;font-size:12px;margin:3px 0}
+.bar{height:8px;background:#252c38;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:#2f6fec}
+.bar.ok i{background:#2ea043}.bar.err i{background:#a33}.bar.ins i{background:#d29922}
+.err{color:#f07171}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-top:1px solid #252c38;text-align:left;font-size:13px}
+th{color:#8b95a7;font-weight:500}td.sz{white-space:nowrap;color:#8b95a7}
+.muted{color:#8b95a7}
+</style></head><body>
+<header><h1>TurboDL</h1><span class="s" id="hdr"></span></header>
+<main>
+<div class="card"><h2>Add downloads</h2>
+<textarea id="urls" placeholder="Paste one or more direct links (one per line)&#10;https://example.com/files/something.pkg"></textarea>
+<div class="row"><input id="nm" placeholder="Save as (optional, single URL)" style="flex:1;min-width:200px">
+<label><input type="checkbox" id="ai" checked> Install when done</label>
+<button onclick="add()">Download</button></div></div>
+
+<div class="card"><h2>Queue</h2><div id="jobs" class="muted">Loading…</div></div>
+
+<div class="card"><h2>Catalog</h2>
+<div class="muted">Browses list files you put on the console yourself (FPKGi JSON format): <code>/user/data/pkgdl/catalogs/GAMES.json</code> etc., or FPKGi's own <code>/user/data/FPKGi/ContentJSONs/</code>. TurboDL ships no lists.</div>
+<div class="row"><select id="ct" onchange="loadCat()"><option>GAMES</option><option>UPDATES</option><option>DLC</option><option>DEMOS</option><option>APPS</option><option>HOMEBREW</option><option>PS1</option><option>PS2</option><option>PSP</option></select>
+<input id="q" placeholder="Search name / title id" oninput="renderCat()" style="flex:1;min-width:200px"><span id="cc" class="muted"></span></div>
+<div id="cat" style="margin-top:8px"></div></div>
+
+<div class="card"><h2>Settings</h2>
+<div class="muted">Site cookies for downloads that need a login. Paste the <code>Cookie:</code> request header from your browser's dev tools. A cookie is only sent to its domain and its subdomains (e.g. <code>example.com</code> also covers <code>cdn.example.com</code>). Leave the cookie empty to remove a site.</div>
+<div class="row"><input id="cd" placeholder="domain, e.g. example.com" style="min-width:220px"></div>
+<textarea id="ck" placeholder="name=value; other=value; ..."></textarea>
+<div class="row"><button onclick="setCookie()">Save cookie</button><span id="cks" class="muted"></span></div>
+<div class="row">Connections <input id="cn" type="number" min="1" max="32" style="width:70px">
+<label><input type="checkbox" id="sa"> Auto-install</label>
+<label><input type="checkbox" id="sd"> Delete pkg after install</label>
+<label><input type="checkbox" id="sr"> Replace if already installed</label>
+Progress popup every <input id="sn" type="number" min="0" max="100" style="width:60px">% (0 = off)
+<button onclick="saveSet()">Save</button></div>
+<div class="row"><a href="/log" target="_blank" style="color:#7aa2f7">View log</a></div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fb(b){b=Number(b)||0;if(b>=1e9)return(b/1e9).toFixed(2)+' GB';if(b>=1e6)return(b/1e6).toFixed(1)+' MB';if(b>=1e3)return(b/1e3).toFixed(0)+' KB';return b+' B'}
+function eta(s){if(!isFinite(s)||s<=0)return'';s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+'h '+m+'m':m?m+'m '+(s%60)+'s':s+'s'}
+async function post(u,d){const r=await fetch(u,{method:'POST',body:new URLSearchParams(d)});return r.text()}
+async function add(){const u=$('urls').value.trim();if(!u)return;const r=await post('/api/add',{urls:u,name:$('nm').value.trim(),auto:$('ai').checked?1:0});$('urls').value='';$('nm').value='';poll();if(r!=='ok')alert(r)}
+async function act(id,op){if(op==='delete'&&!confirm('Remove from queue and delete the file?'))return;await post('/api/job',{id,op});poll()}
+let polling=false;
+async function poll(){if(polling)return;polling=true;try{
+ const js=await (await fetch('/api/jobs')).json();
+ if(!js.length){$('jobs').innerHTML='<span class="muted">Nothing queued. Paste a link above or pick something from the catalog.</span>';return}
+ $('jobs').innerHTML=js.map(j=>{
+  const p=j.size?Math.min(100,j.done*100/j.size):0;const st=j.state;
+  let cls=st=='Installed'||st=='Downloaded'?'ok':st=='Error'?'err':st=='Installing'?'ins':'';
+  let pct=st=='Installing'?j.ipct:p;
+  let meta=`${esc(st)} · ${fb(j.done)} / ${j.size?fb(j.size):'?'} · ${p.toFixed(1)}%`;
+  if(st=='Downloading')meta+=` · ${fb(j.speed)}/s · ETA ${eta((j.size-j.done)/j.speed)}`;
+  if(st=='Installing')meta=`Installing… ${j.ipct}%`;
+  const b=[];
+  if(st=='Downloading'||st=='Queued')b.push(`<button class="g" onclick="act(${j.id},'pause')">Pause</button>`);
+  if(st=='Paused')b.push(`<button onclick="act(${j.id},'resume')">Resume</button>`);
+  if(st=='Error')b.push(`<button onclick="act(${j.id},'retry')">Retry</button>`);
+  if(st=='Downloaded'||(st=='Error'&&j.complete)||st=='Installed')b.push(`<button class="g" onclick="act(${j.id},'install')">Install</button>`);
+  if(st!='Installing')b.push(`<button class="r" onclick="act(${j.id},'delete')">Remove</button>`);
+  return `<div class="job"><div class="n">${esc(j.name)}</div><div class="m">${meta}</div>
+  ${j.err?`<div class="m err">${esc(j.err)}</div>`:''}<div class="bar ${cls}"><i style="width:${pct}%"></i></div><div class="row">${b.join('')}</div></div>`}).join('');
+}catch(e){}finally{polling=false}}
+async function info(){try{const i=await (await fetch('/api/info')).json();
+ $('hdr').textContent=`${esc(location.host)} · free ${fb(i.free)} · ${i.conns} conns · cookies ${i.cookie?'✓':'–'} · jailbreak ${i.jb?'✓':'✗'}`;
+ $('cks').textContent=i.cookies?('cookies saved for: '+i.cookies):'no site cookies saved';
+ if(document.activeElement.id!=='sn')$('sn').value=i.notify;
+ if(document.activeElement.id!=='cn')$('cn').value=i.conns;$('sa').checked=!!i.auto;$('sd').checked=!!i.del;$('sr').checked=!!i.replace;}catch(e){}}
+async function setCookie(){const d=$('cd').value.trim();if(!d){alert('Enter the domain the cookie belongs to');return}const r=await post('/api/cookie',{domain:d,cookie:$('ck').value});if(r!=='ok')alert(r);$('ck').value='';info()}
+async function saveSet(){await post('/api/settings',{conns:$('cn').value,auto:$('sa').checked?1:0,del:$('sd').checked?1:0,replace:$('sr').checked?1:0,notify:$('sn').value});info()}
+let cat=[];
+async function loadCat(){$('cat').innerHTML='<span class="muted">Loading…</span>';cat=[];
+ try{const r=await fetch('/api/catalog?t='+$('ct').value);if(!r.ok)throw 0;const d=await r.json();
+  cat=Object.entries(d.DATA||{}).map(([url,v])=>({url,...v}));}catch(e){$('cat').innerHTML='<span class="muted">No list file on the console for this category.</span>';$('cc').textContent='';return}
+ renderCat()}
+function renderCat(){const q=$('q').value.toLowerCase();
+ const f=cat.filter(x=>!q||String(x.name).toLowerCase().includes(q)||String(x.title_id||'').toLowerCase().includes(q));
+ $('cc').textContent=f.length+' items';
+ $('cat').innerHTML='<table><tr><th>Name</th><th>ID</th><th>Region</th><th>Ver</th><th>Size</th><th></th></tr>'+f.slice(0,300).map((x,i)=>
+  `<tr><td>${esc(x.name)}</td><td>${esc(x.title_id)}</td><td>${esc(x.region)}</td><td>${esc(x.version)}</td><td class="sz">${fb(x.size)}</td><td><button data-u="${esc(x.url)}" onclick="dl(this)">Download</button></td></tr>`).join('')+'</table>'+(f.length>300?'<div class="muted">Showing first 300 – refine your search.</div>':'')}
+async function dl(b){b.disabled=true;const r=await post('/api/add',{urls:b.dataset.u,auto:$('ai').checked?1:0});b.textContent=r==='ok'?'Queued':'Failed';poll()}
+poll();info();loadCat();setInterval(poll,1000);setInterval(info,5000);
+</script></body></html>

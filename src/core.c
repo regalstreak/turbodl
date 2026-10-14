@@ -1,0 +1,101 @@
+// Shared by the app (PKDL00001) and the background daemon (PKDL00002).
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include "common.h"
+#include "sce.h"
+
+job_t g_jobs[MAX_JOBS];
+pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+char g_cookie[8192];
+int g_conns = 12;
+int g_auto_install = 1;
+int g_delete_after = 1;
+int g_replace = 0;
+int g_notify_step = 10;
+int g_jb_ok = 0;
+int g_net_ok = 0;
+volatile int g_quitting = 0;
+char g_ip[32] = "?";
+const char *g_role = "app";
+
+// raw syscall (same as GoldHEN SDK)
+__asm__(
+    ".intel_syntax noprefix\n"
+    ".globl orbis_syscall\n"
+    "orbis_syscall:\n"
+    "  mov rax, 0\n"
+    "  mov r10, rcx\n"
+    "  syscall\n"
+    "  jb 1f\n"
+    "  ret\n"
+    "1:\n"
+    "  mov rax, -1\n"
+    "  ret\n"
+    ".att_syntax prefix\n");
+
+struct jailbreak_backup {
+    uint32_t cr_uid, cr_ruid, cr_rgid, cr_groups;
+    uint64_t cr_paid;
+    uint64_t cr_caps[2];
+    void *cr_prison;
+    void *fd_cdir, *fd_jdir, *fd_rdir;
+};
+
+int core_jailbreak(void) {
+    static struct jailbreak_backup bk;
+    // GoldHEN SDK: syscall 500, cmd 2 = jailbreak
+    return orbis_syscall(500, 2, &bk) == 0;
+}
+
+void core_load_modules(int with_video) {
+    static const uint32_t mods[] = {
+        SYSMOD_SYSCORE, SYSMOD_SYSTEM_SERVICE, SYSMOD_USER_SERVICE, SYSMOD_NETCTL, SYSMOD_NET,
+        SYSMOD_HTTP, SYSMOD_SSL, SYSMOD_APPINSTUTIL, SYSMOD_BGFT, SYSMOD_NP_COMMON, SYSMOD_PAD,
+    };
+    for (size_t i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
+        int r = sceSysmoduleLoadModuleInternal(mods[i]);
+        if (r < 0) printf("[pkgdl] load module 0x%08X failed 0x%08X\n", mods[i], r);
+    }
+    if (with_video) {
+        sceSysmoduleLoadModuleInternal(SYSMOD_VIDEO_OUT);
+        sceSysmoduleLoadModuleInternal(SYSMOD_AUDIOOUT);
+    }
+}
+
+void core_get_ip(void) {
+    union { char ip[16]; uint8_t raw[256]; } info;
+    memset(&info, 0, sizeof(info));
+    sceNetCtlInit();
+    if (sceNetCtlGetInfo(14 /* IP_ADDRESS */, &info) == 0 && info.ip[0])
+        snprintf(g_ip, sizeof(g_ip), "%s", info.ip);
+}
+
+// common early init; returns 0 on success
+void core_early_init(const char *role, int with_video) {
+    g_role = role;
+    setvbuf(stdout, NULL, _IONBF, 0);
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGSYS, SIG_IGN); // no GoldHEN -> syscall 500 returns ENOSYS instead of killing us
+    g_jb_ok = core_jailbreak(); // first: gives us the rights to load internal modules
+    core_load_modules(with_video);
+    mkdir_p(APP_DIR "/downloads");
+    log_msg("%s %s [%s] starting (jailbreak %s, build %s)", APP_NAME, APP_VERSION, role,
+            g_jb_ok ? "ok" : "FAILED", BUILD_ID);
+    sceUserServiceInitialize(NULL);
+}
+
+// load state + start downloader engine and web panel in this process
+void core_start_engine(void) {
+    config_load();
+    cookie_load();
+    queue_load();
+    log_msg("init: network");
+    if (http_global_init() == 0) g_net_ok = 1;
+    else log_msg("Network init failed");
+    core_get_ip();
+    dl_start();
+    web_start();
+}

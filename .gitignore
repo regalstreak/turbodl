@@ -1,0 +1,13 @@
+# build outputs
+build/
+*.pkg
+eboot.bin
+pkg.gp4
+sce_sys/param.sfo
+assets/misc/
+
+# copied from the OpenOrbis SDK at build time
+sce_module/
+sce_sys/about/
+
+.DS_Store
