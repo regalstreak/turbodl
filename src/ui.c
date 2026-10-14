@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include "common.h"
 #include "sce.h"
+#include <orbis/ImeDialog.h>
 #include <proto-include.h>
 #include "font_ttf.h"
 
@@ -196,84 +197,61 @@ static int video_init(void) {
 }
 
 // ---------------- on-screen keyboard (system IME) ----------------
-int sceImeDialogInit(const void *param, void *ext);
-int sceImeDialogGetStatus(void);
-int sceImeDialogGetResult(void *result);
-int sceImeDialogTerm(void);
-int sceImeDialogAbort(void);
-
-// hand-rolled layout: the SDK header for this struct is missing fields
-typedef struct {
-    uint32_t userId;
-    int type;
-    uint64_t supportedLanguages;
-    int enterLabel;
-    int inputMethod;
-    void *filter;
-    uint32_t option;
-    uint32_t maxTextLength;
-    wchar_t *inputTextBuffer;
-    float posx, posy;
-    int horizontalAlignment, verticalAlignment;
-    void *work, *arg, *eventfunc;
-    int8_t reserved[8];
-    const wchar_t *placeholder;
-    const wchar_t *title;
-} ime_setting_t;
-typedef struct { int endstatus; int8_t reserved[12]; } ime_result_t;
-
-#define IME_STATUS_RUNNING 1
-#define IME_STATUS_STOPPED 2
-
 char *ui_ask_text(const char *title, const char *initial) {
     static char out[128];
-    static wchar_t wbuf[128];
+    static wchar_t wbuf[128], wtitle[64], wplace[64];
     out[0] = 0;
     sceSysmoduleLoadModule(SYSMOD_IME_DIALOG);
     sceSysmoduleLoadModule(SYSMOD_LIBIME);
+
     memset(wbuf, 0, sizeof(wbuf));
     if (initial && *initial) {
         size_t n = strlen(initial);
-        if (n > 126) n = 126;
+        if (n > 120) n = 120;
         for (size_t i = 0; i < n; i++) wbuf[i] = (wchar_t)(unsigned char)initial[i];
     }
-    static wchar_t wtitle[64], wplace[64];
     const char *t = title ? title : "Search";
-    size_t tn = strlen(t);
-    if (tn > 63) tn = 63;
+    size_t tn = strlen(t) > 60 ? 60 : strlen(t);
     for (size_t i = 0; i < tn; i++) wtitle[i] = (wchar_t)(unsigned char)t[i];
     wtitle[tn] = 0;
     const char *p = "type here";
     for (size_t i = 0; i < strlen(p); i++) wplace[i] = (wchar_t)p[i];
 
-    ime_setting_t s;
+    OrbisImeDialogSetting s;
     memset(&s, 0, sizeof(s));
     s.userId = 0xFFFFFFFF;
-    s.type = 0;                    // default
-    s.supportedLanguages = 0;
-    s.enterLabel = 2;              // search
-    s.inputMethod = 0;
-    s.maxTextLength = 126;
+    s.type = ORBIS_TYPE_DEFAULT;
+    s.enterLabel = ORBIS_BUTTON_LABEL_SEARCH;
+    s.inputMethod = ORBIS__DEFAULT;
+    s.maxTextLength = 120;
     s.inputTextBuffer = wbuf;
-    s.horizontalAlignment = 1;
-    s.verticalAlignment = 1;
+    s.posx = 0.0f;                       // 0 with center alignment = centred panel
+    s.posy = 0.0f;
+    s.horizontalAlignment = ORBIS_H_CENTER;
+    s.verticalAlignment = ORBIS_V_CENTER;
     s.placeholder = wplace;
     s.title = wtitle;
 
-    if (sceImeDialogInit(&s, NULL) != 0) { log_msg("ui: IME not available"); return NULL; }
-    int status = 0;
-    for (;;) {
+    int r = sceImeDialogInit(&s, NULL);
+    if (r != 0) { log_msg("ui: IME not available (0x%08X)", r); return NULL; }
+    // wait for the panel to come up; bail out if it never does
+    int waited = 0, running = 0;
+    while (waited < 3000) {
+        if (sceImeDialogGetStatus() == ORBIS_DIALOG_STATUS_RUNNING) { running = 1; break; }
         sceKernelUsleep(100000);
-        status = sceImeDialogGetStatus();
-        if (status == IME_STATUS_STOPPED || status == 0) break;
+        waited += 100;
     }
-    ime_result_t res;
+    if (!running) { log_msg("ui: IME did not open"); sceImeDialogTerm(); return NULL; }
+    while (sceImeDialogGetStatus() == ORBIS_DIALOG_STATUS_RUNNING) sceKernelUsleep(100000);
+
+    OrbisDialogResult res;
     memset(&res, 0, sizeof(res));
-    int ok = sceImeDialogGetResult(&res) == 0 && res.endstatus == 0;
+    int ok = sceImeDialogGetResult(&res) == 0 && res.endstatus == ORBIS_DIALOG_OK;
     sceImeDialogTerm();
+    log_msg("ui: IME result %d (%d chars)", ok, ok ? (int)wcslen(wbuf) : 0);
     if (!ok) return NULL;
     size_t n = 0;
-    while (n < 126 && wbuf[n]) { out[n] = (char)(wbuf[n] & 0x7F); n++; }
+    while (n < 120 && wbuf[n]) { out[n] = (char)(wbuf[n] & 0x7F); n++; }
     out[n] = 0;
     return out;
 }
@@ -324,27 +302,26 @@ static void cat_index(void) {
     }
 }
 
-static const char *cat_field(int idx, int field) {
-    static char buf[600];
-    buf[0] = 0;
-    if (idx < 0 || idx >= s_cat_n) return buf;
+static void cat_field(int idx, int field, char *out, size_t outn) {
+    out[0] = 0;
+    if (idx < 0 || idx >= s_cat_n) return;
     char *p = s_cat + s_cat_off[idx];
     for (int f = 0; f < field; f++) {
         p = strchr(p, '\t');
-        if (!p) return buf;
+        if (!p) return;
         p++;
     }
     size_t n = 0;
-    while (p[n] && p[n] != '\t' && p[n] != '\n' && n < sizeof(buf) - 1) n++;
-    memcpy(buf, p, n);
-    buf[n] = 0;
-    return buf;
+    while (p[n] && p[n] != '\t' && p[n] != '\n' && n < outn - 1) n++;
+    memcpy(out, p, n);
+    out[n] = 0;
 }
 
 static int cat_matches(int idx) {
     if (!s_filter[0]) return 1;
-    const char *name = cat_field(idx, 0);
-    const char *tid = cat_field(idx, 1);
+    char name[260], tid[40];
+    cat_field(idx, 0, name, sizeof(name));
+    cat_field(idx, 1, tid, sizeof(tid));
     char nl[200], tl[32];
     size_t n = strlen(name) < sizeof(nl) - 1 ? strlen(name) : sizeof(nl) - 1;
     for (size_t i = 0; i < n; i++) nl[i] = (char)tolower((unsigned char)name[i]);
@@ -502,13 +479,14 @@ static void input(void) {
     if (pressed & PAD_CROSS) {
         int idx = cat_shown_sel(s_cat_sel);
         if (idx >= 0) {
-            const char *url = cat_field(idx, 5);
-            const char *name = cat_field(idx, 0);
+            char url[600], name[260];
+            cat_field(idx, 5, url, sizeof(url));
+            cat_field(idx, 0, name, sizeof(name));
             if (url[0]) {
                 ui_add_url(url);
                 set_note("Queued: %s", name);
-                log_msg("catalog: queued %s", name);
-            }
+                log_msg("catalog: queued %s (%s)", name, url);
+            } else set_note("No link for that entry");
         }
     }
 }
@@ -524,31 +502,30 @@ static void draw_header(void) {
     snprintf(b, sizeof(b), "http://%s:%d", g_ip[0] ? g_ip : "?", WEB_PORT);
     text(W - 60 - text_w(F_MED, b), 14, F_MED, C_BLUE, b, 0);
 
-    // status line: spinner + text (or the steady mode line)
-    char a1[32], a2[32];
+    // second line: mode summary right aligned, transient status message clipped on the left
+    char a1[32], a2[32], mode[360];
     uint64_t total = 0;
-    for (int i = 0; i < MAX_JOBS; i++) if (g_jobs[i].used && g_jobs[i].state == J_DOWNLOADING) total += g_jobs[i].speed;
+    for (int i = 0; i < MAX_JOBS; i++)
+        if (g_jobs[i].used && g_jobs[i].state == J_DOWNLOADING) total += g_jobs[i].speed;
     fmt_bytes(a1, sizeof(a1), total);
     fmt_bytes(a2, sizeof(a2), disk_free(APP_DIR));
-    int lx = 60;
+    snprintf(mode, sizeof(mode), "%s    %s/s    free %s    %dx%d conns    cookies %s    jb %s",
+             g_remote ? "BACKGROUND MODE" : "in-app mode", a1, a2, g_max_parallel, g_conns,
+             g_cookie[0] ? "yes" : "-", g_jb_ok ? "yes" : "NO");
+    int mw = text_w(F_SMALL, mode);
+    int mx = W - 60 - mw;
+    if (mx < 60) mx = 60;
+    text(mx, 76, F_SMALL, C_MUTED, mode, 0);
+
+    int avail = mx - 60 - 30;   // room left of the right-aligned text
     if (g_loading) {
         static const char spin[] = "|/-\\";
         char sp[4] = {spin[(now_ms() / 150) % 4], 0, 0, 0};
-        text(lx, 74, F_SMALL, C_AMBER, sp, 0);
-        text(lx + 16, 74, F_SMALL, C_AMBER, g_status, 0);
-    } else {
-        snprintf(b, sizeof(b), "%s   %s/s   free %s   %dx%d conns   cookies %s   jb %s",
-                 g_remote ? "BACKGROUND MODE" : "in-app mode", a1, a2, g_max_parallel, g_conns,
-                 g_cookie[0] ? "yes" : "-", g_jb_ok ? "yes" : "NO");
-        if (g_status[0] && strcmp(g_status, "Ready") != 0) {
-            text(lx, 74, F_SMALL, C_AMBER, g_status, 0);
-            lx += text_w(F_SMALL, g_status) + 24;
-        }
-        text(lx, 74, F_SMALL, C_MUTED, b, 0);
+        text(60, 76, F_SMALL, C_AMBER, sp, 0);
+        if (avail > 60) text(76, 76, F_SMALL, C_AMBER, g_status, avail - 16);
+    } else if (g_status[0] && strcmp(g_status, "Ready") != 0 && avail > 60) {
+        text(60, 76, F_SMALL, C_AMBER, g_status, avail);
     }
-    // tab indicator
-    const char *tabs = s_tab ? "OPTIONS: downloads" : "OPTIONS: catalog";
-    text(W - 60 - text_w(F_SMALL, tabs), 74, F_SMALL, C_SEL == 0 ? C_MUTED : C_BLUE, tabs, 0);
 }
 
 static void progress_bar(int x, int y, int w, int h, double pct, uint32_t col) {
@@ -639,15 +616,17 @@ static void draw_catalog(void) {
         int y = LIST_TOP + r * ROW_H;
         rect(40, y, W - 80, ROW_H - 12, sel == s_cat_sel ? C_SEL : C_PANEL);
         if (sel == s_cat_sel) rect(40, y, 6, ROW_H - 12, C_BLUE);
-        text(70, y + 8, F_MED, C_TEXT, cat_field(idx, 0), W - 700);
-        const char *sz = cat_field(idx, 2);
-        char szbuf[32];
+        char nm[260], tid[40], sz[32], rg[16], vr[16], szbuf[32];
+        cat_field(idx, 0, nm, sizeof(nm));
+        cat_field(idx, 1, tid, sizeof(tid));
+        cat_field(idx, 2, sz, sizeof(sz));
+        cat_field(idx, 3, rg, sizeof(rg));
+        cat_field(idx, 4, vr, sizeof(vr));
         if (sz[0]) fmt_bytes(szbuf, sizeof(szbuf), strtoull(sz, NULL, 10));
-        else snprintf(szbuf, sizeof(szbuf), "?");
-        snprintf(b, sizeof(b), "%s   %s   %s", cat_field(idx, 1), cat_field(idx, 3), szbuf);
-        text(70, y + 48, F_SMALL, C_MUTED, b, W - 200);
-        snprintf(b, sizeof(b), "%s", cat_field(idx, 5));
-        text(70, y + 76, F_SMALL, C_BLUE, b, W - 200);
+        else snprintf(szbuf, sizeof(szbuf), "size unknown");
+        text(70, y + 24, F_MED, C_TEXT, nm, W - 700);
+        snprintf(b, sizeof(b), "%s%s%s   %s", tid, rg[0] ? "   " : "", rg, szbuf);
+        text(70, y + 62, F_SMALL, C_MUTED, b, W - 200);
     }
     snprintf(b, sizeof(b), "%s: %d of %d entries%s%s", s_cat_type, s_cat_sel + 1, s_cat_shown,
              s_filter[0] ? "   filter: " : "", s_filter);
@@ -677,7 +656,10 @@ static void draw_footer(void) {
         help = "Press SQUARE again to remove this item and delete its file";
     else
         help = "X pause/resume/retry   TRIANGLE install   SQUARE remove   L1/R1 connections   L2/R2 parallel   OPTIONS: catalog";
-    text(60, FOOT_TOP + 14, F_SMALL, (s_confirm_del >= 0 && t < s_confirm_until) ? C_AMBER : C_TEXT, help, 0);
+    const char *tabhint = s_tab ? "OPTIONS: downloads" : "OPTIONS: catalog";
+    int avail = W - 120 - text_w(F_SMALL, tabhint) - 30;
+    text(60, FOOT_TOP + 14, F_SMALL, (s_confirm_del >= 0 && t < s_confirm_until) ? C_AMBER : C_TEXT, help, avail);
+    text(W - 60 - text_w(F_SMALL, tabhint), FOOT_TOP + 14, F_SMALL, C_BLUE, tabhint, 0);
 }
 
 static void draw(void) {
