@@ -40,7 +40,7 @@ void config_load(void) {
 void config_save(void) {
     FILE *f = fopen(APP_DIR "/config.ini", "w");
     if (!f) return;
-    fprintf(f, "# PKG Downloader settings\n");
+    fprintf(f, "# TurboDL settings\n");
     fprintf(f, "connections=%d\n", g_conns);
     fprintf(f, "auto_install=%d\n", g_auto_install);
     fprintf(f, "delete_after_install=%d\n", g_delete_after);

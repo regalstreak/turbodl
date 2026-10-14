@@ -9,7 +9,7 @@
 #define NET_POOL   (1 * 1024 * 1024)
 #define SSL_POOL   (4 * 1024 * 1024)
 #define HTTP_POOL  (4 * 1024 * 1024)
-#define UA "Mozilla/5.0 (PlayStation 4; PKG Downloader 1.0)"
+#define UA "Mozilla/5.0 (PlayStation 4; TurboDL 1.0)"
 
 static int s_http = -1;
 
